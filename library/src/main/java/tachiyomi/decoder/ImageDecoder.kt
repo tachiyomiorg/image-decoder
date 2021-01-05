@@ -14,7 +14,9 @@ data class ImageDecoder(
   val height: Int
 ) {
 
-  private var isRecycled = false
+  var isRecycled = false
+    private set
+
   private var shouldRecycle = false
   private var decoding = AtomicInteger()
   private val lock = ReentrantReadWriteLock()
