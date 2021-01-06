@@ -3,6 +3,7 @@
 //
 
 #include "decoder_jpeg.h"
+#include "jpegint.h"
 
 bool JpegDecoder::handles(const uint8_t* stream) {
   return stream[0] == 0xFF && stream[1] == 0xD8 && stream[2] == 0xFF;
@@ -110,5 +111,7 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect, bool rgb565, ui
   }
 
   jpeg_skip_scanlines(&jinfo, outRect.height - outRect.y);
+
+  jinfo.global_state = DSTATE_STOPPING;
   jpeg_finish_decompress(&jinfo);
 }
