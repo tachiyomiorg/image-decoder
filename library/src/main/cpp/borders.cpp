@@ -3,7 +3,7 @@
 //
 
 #include "borders.h"
-#include <math.h>
+#include <cmath>
 
 bool inline isBlackPixel(const uint8_t* pixels, uint32_t width, uint32_t x, uint32_t y) {
   const uint8_t pixel = *((uint8_t *)pixels + (y * width + x));
@@ -182,7 +182,7 @@ uint32_t findBorderBottom(uint8_t* pixels, uint32_t width, uint32_t height) {
   }
 
   // Scan horizontal lines in search of filled lines
-  for (y = height - 2; y > 0; --y) {
+  for (y = height - 2; y > 0; y--) {
     uint32_t filledCount = 0;
 
     for (x = 0; x < width; x+=2) {
