@@ -46,7 +46,7 @@ data class ImageDecoder(
 
   private fun checkRegionBounds(x: Int, y: Int, width: Int, height: Int) {
     if (x < 0 || x > this.width ||
-      y < 0 || y > this.width ||
+      y < 0 || y > this.height ||
       width <= 0 || width + x > this.width ||
       height <= 0 || height + y > this.height
     ) {
