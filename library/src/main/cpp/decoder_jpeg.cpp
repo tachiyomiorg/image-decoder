@@ -110,8 +110,6 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect, bool rgb565, ui
     outPixelsPos += outStride;
   }
 
-  jpeg_skip_scanlines(&jinfo, outRect.height - outRect.y);
-
-  jinfo.global_state = DSTATE_STOPPING;
-  jpeg_finish_decompress(&jinfo);
+  // Call abort instead of finish to allow finishing before the last scanline
+  jpeg_abort_decompress(&jinfo);
 }
