@@ -89,7 +89,7 @@ uint32_t findBorderRight(uint8_t* pixels, uint32_t width, uint32_t height, uint3
   }
 
   // Scan vertical lines in search of filled lines
-  for (x = width - 2; x >= 0; x--) {
+  for (x = width - 2; x > 0; x--) {
     uint32_t filledCount = 0;
 
     for (y = top; y < bottom; y+=2) {
@@ -182,7 +182,7 @@ uint32_t findBorderBottom(uint8_t* pixels, uint32_t width, uint32_t height) {
   }
 
   // Scan horizontal lines in search of filled lines
-  for (y = height - 2; y >= 0; y--) {
+  for (y = height - 2; y > 0; --y) {
     uint32_t filledCount = 0;
 
     for (x = 0; x < width; x+=2) {
