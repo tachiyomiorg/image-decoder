@@ -100,17 +100,17 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect, bool rgb565, ui
   // This has to be called after jpeg_crop_scanline as inWidth might change
   uint32_t inStride = inWidth * pixelSize;
 
-  auto inPixels = std::make_unique<uint8_t[]>(inStride);
+  auto inRow = std::make_unique<uint8_t[]>(inStride);
+  uint8_t* inRowPtr = inRow.get();
 
-  uint8_t* inPixelsPos = inPixels.get();
   // libjpeg doesn't always provide the exact requested region because it has to be a multiple of
   // the DCT, so we have to account for shifts.
-  uint8_t* inPixelsPosAligned = inPixelsPos + (outRect.x - inX) * pixelSize;
+  uint8_t* inRowPtrAligned = inRowPtr + (outRect.x - inX) * pixelSize;
   uint8_t* outPixelsPos = outPixels;
 
   for (uint32_t i = 0; i < outRect.height; i++) {
-    jpeg_read_scanlines(&jinfo, &inPixelsPos, 1);
-    memcpy(outPixelsPos, inPixelsPosAligned, outStride);
+    jpeg_read_scanlines(&jinfo, &inRowPtr, 1);
+    memcpy(outPixelsPos, inRowPtrAligned, outStride);
     outPixelsPos += outStride;
   }
 
