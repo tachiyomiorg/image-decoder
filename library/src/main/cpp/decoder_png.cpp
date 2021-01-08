@@ -89,9 +89,6 @@ ImageInfo PngDecoder::parseInfo() {
       if (colorType & (uint8_t) PNG_COLOR_MASK_ALPHA) {
         png_set_strip_alpha(png);
       }
-      if (colorType & (uint8_t) PNG_COLOR_MASK_PALETTE) {
-        png_set_palette_to_rgb(png);
-      }
       if (colorType & (uint8_t) PNG_COLOR_MASK_COLOR) {
         png_set_rgb_to_gray(png, 1, -1, -1);
       }
