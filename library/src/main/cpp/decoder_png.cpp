@@ -74,43 +74,50 @@ ImageInfo PngDecoder::parseInfo() {
   uint32_t imageWidth = png_get_image_width(png, pinfo);
   uint32_t imageHeight = png_get_image_height(png, pinfo);
 
-  Rect bounds{};
+  Rect bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
   if (cropBorders) {
-    uint8_t colorType = png_get_color_type(png, pinfo);
-    uint8_t bitDepth = png_get_bit_depth(png, pinfo);
+    try {
+      auto pixels = std::make_unique<uint8_t[]>(imageWidth * imageHeight);
 
-    png_set_expand(png);
-    if (bitDepth == 16) {
-      png_set_scale_16(png);
-    }
+      uint8_t colorType = png_get_color_type(png, pinfo);
+      uint8_t bitDepth = png_get_bit_depth(png, pinfo);
 
-    if (!(colorType == PNG_COLOR_TYPE_GRAY || colorType == PNG_COLOR_TYPE_GRAY_ALPHA)) {
-      png_set_rgb_to_gray(png, 1, -1, -1);
-    }
-    int32_t passes = png_set_interlace_handling(png);
-
-    auto pixels = std::make_unique<uint8_t[]>(imageWidth * imageHeight);
-    uint8_t* pixelsPos;
-    while (--passes >= 0) {
-      pixelsPos = pixels.get();
-      for (uint32_t i = 0; i < imageHeight; ++i) {
-        png_read_row(png, pixelsPos, nullptr);
-        pixelsPos += imageWidth;
+      png_set_expand(png);
+      if (bitDepth == 16) {
+        png_set_scale_16(png);
       }
+      if (colorType & (uint8_t) PNG_COLOR_MASK_ALPHA) {
+        png_set_strip_alpha(png);
+      }
+      if (colorType & (uint8_t) PNG_COLOR_MASK_PALETTE) {
+        png_set_palette_to_rgb(png);
+      }
+      if (colorType & (uint8_t) PNG_COLOR_MASK_COLOR) {
+        png_set_rgb_to_gray(png, 1, -1, -1);
+      }
+
+      int32_t passes = png_set_interlace_handling(png);
+
+      uint8_t* pixelsPos;
+      while (--passes >= 0) {
+        pixelsPos = pixels.get();
+        for (uint32_t i = 0; i < imageHeight; ++i) {
+          png_read_row(png, pixelsPos, nullptr);
+          pixelsPos += imageWidth;
+        }
+      }
+      bounds = findBorders(pixels.get(), imageWidth, imageHeight);
+    } catch (std::bad_alloc &ex) {
+      LOGW("Couldn't crop borders on a PNG image of size %dx%d", imageWidth, imageHeight);
     }
-    bounds = findBorders(pixels.get(), imageWidth, imageHeight);
-  } else {
-    bounds = Rect { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
   }
 
-  ImageInfo info {
+  return ImageInfo {
     .imageWidth = imageWidth,
     .imageHeight = imageHeight,
     .isAnimated = false,
     .bounds = bounds
   };
-
-  return info;
 }
 
 void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize) {
@@ -140,24 +147,41 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
   uint32_t inStrideOffset = inRect.x * inComponents;
 
   uint32_t outStride = outRect.width * (rgb565 ? 2 : 4);
+  uint8_t* outPixelsPos = outPixels;
 
-  auto rowFunc = rgb565 ? &RGBA8888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
+  auto rowFn = rgb565 ? &RGBA8888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
 
   if (sampleSize == 1) {
-    auto inRow = std::make_unique<uint8_t[]>(inStride);
-    auto* inRowPtr = inRow.get();
-    uint8_t* outPixelsPos = nullptr;
     uint32_t inRemainY = info.imageHeight - inRect.height - inRect.y;
 
-    while (--passes >= 0) {
-      outPixelsPos = outPixels;
+    if (passes == 1) {
+      auto* inRow = std::make_unique<uint8_t[]>(inStride).get();
+
       png_skip_rows(png, inRect.y);
       for (uint32_t i = 0; i < inRect.height; ++i) {
-        png_read_row(png, inRowPtr, nullptr);
-        rowFunc(outPixelsPos, inRowPtr + inStrideOffset, nullptr, outRect.width, 1);
+        png_read_row(png, inRow, nullptr);
+        rowFn(outPixelsPos, inRow + inStrideOffset, nullptr, outRect.width, 1);
         outPixelsPos += outStride;
       }
       png_skip_rows(png, inRemainY);
+    } else {
+      auto inPixels = std::make_unique<uint8_t[]>(inStride * inRect.height);
+      uint8_t* inPixelsPos = inPixels.get();
+
+      while (--passes >= 0) {
+        png_skip_rows(png, inRect.y);
+        for (uint32_t i = 0; i < inRect.height; ++i) {
+          png_read_row(png, inPixelsPos, nullptr);
+          inPixelsPos += inStride;
+        }
+        png_skip_rows(png, inRemainY);
+        inPixelsPos = inPixels.get();
+      }
+      for (uint32_t i = 0; i < inRect.height; ++i) {
+        rowFn(outPixelsPos, inPixelsPos + inStrideOffset, nullptr, outRect.width, sampleSize);
+        inPixelsPos += inStride;
+        outPixelsPos += outStride;
+      }
     }
   } else {
     uint32_t skipStart = (sampleSize - 2) / 2;
@@ -169,7 +193,6 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
     if (passes == 1) {
       auto inRow1 = std::make_unique<uint8_t[]>(inStride).get();
       auto inRow2 = std::make_unique<uint8_t[]>(inStride).get();
-      uint8_t* outPixelsPos = outPixels;
 
       png_skip_rows(png, inRect.y);
 
@@ -177,17 +200,16 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
         png_skip_rows(png, skipStart);
         png_read_row(png, inRow1, nullptr);
         png_read_row(png, inRow2, nullptr);
-        rowFunc(outPixelsPos, inRow1 + inStrideOffset, inRow2 + inStrideOffset, outRect.width, sampleSize);
+        rowFn(outPixelsPos, inRow1 + inStrideOffset, inRow2 + inStrideOffset, outRect.width, sampleSize);
         outPixelsPos += outStride;
         png_skip_rows(png, skipEnd);
       }
     } else {
       auto tmpPixels = std::make_unique<uint8_t[]>(inStride * outRect.height * 2);
-      uint8_t* tmpPixelsPos = nullptr;
+      uint8_t* tmpPixelsPos = tmpPixels.get();
 
       while (--passes >= 0) {
         png_skip_rows(png, inRect.y);
-        tmpPixelsPos = tmpPixels.get();
         for (uint32_t i = 0; i < outRect.height; ++i) {
           png_skip_rows(png, skipStart);
           png_read_row(png, tmpPixelsPos, nullptr);
@@ -197,13 +219,12 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
           png_skip_rows(png, skipEnd);
         }
         png_skip_rows(png, inRemainY);
+        tmpPixelsPos = tmpPixels.get();
       }
 
-      uint8_t* outPixelsPos = outPixels;
-      tmpPixelsPos = tmpPixels.get();
       for (uint32_t i = 0; i < outRect.height; ++i) {
-        rowFunc(outPixelsPos, tmpPixelsPos + inStrideOffset, tmpPixelsPos + inStride + inStrideOffset,
-          outRect.width, sampleSize);
+        rowFn(outPixelsPos, tmpPixelsPos + inStrideOffset, tmpPixelsPos + inStride + inStrideOffset,
+              outRect.width, sampleSize);
         outPixelsPos += outStride;
         tmpPixelsPos += inStride * 2;
       }

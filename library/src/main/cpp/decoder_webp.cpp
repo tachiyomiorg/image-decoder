@@ -24,19 +24,21 @@ ImageInfo WebpDecoder::parseInfo() {
   uint32_t imageWidth = features.width;
   uint32_t imageHeight = features.height;
 
-  Rect bounds{};
+  Rect bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
   if (cropBorders) {
     int iw = features.width;
     int ih = features.height;
     uint8_t *u, *v;
     int stride, uvStride;
     auto* luma = WebPDecodeYUV(stream->bytes, stream->size, &iw, &ih, &u, &v, &stride, &uvStride);
-
-    bounds = findBorders(luma, imageWidth, imageHeight);
-    WebPFree(luma);
-  } else {
-    bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
+    if (luma != nullptr) {
+      bounds = findBorders(luma, imageWidth, imageHeight);
+      WebPFree(luma);
+    } else {
+      LOGW("Couldn't crop borders on a WebP image of size %dx%d", imageWidth, imageHeight);
+    }
   }
+
   return ImageInfo {
     .imageWidth = imageWidth,
     .imageHeight = imageHeight,

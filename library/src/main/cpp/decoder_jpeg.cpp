@@ -46,31 +46,35 @@ ImageInfo JpegDecoder::parseInfo() {
   auto session = initDecodeSession();
   auto jinfo = session->jinfo;
 
-  Rect bounds{};
-  if (cropBorders) {
-    jinfo.out_color_space = JCS_GRAYSCALE;
-    jpeg_start_decompress(&jinfo);
+  uint32_t imageWidth = jinfo.image_width;
+  uint32_t imageHeight = jinfo.image_height;
 
-    auto pixels = std::make_unique<uint8_t[]>(jinfo.image_width * jinfo.image_height);
-    uint8_t* pixelsPtr = pixels.get();
-    while (jinfo.output_scanline < jinfo.output_height) {
-      uint8_t* offset = pixelsPtr + jinfo.output_scanline * jinfo.image_width;
-      jpeg_read_scanlines(&jinfo, &offset, 1);
+  Rect bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
+  if (cropBorders) {
+    try {
+      auto pixels = std::make_unique<uint8_t[]>(imageWidth * imageHeight);
+
+      jinfo.out_color_space = JCS_GRAYSCALE;
+      jpeg_start_decompress(&jinfo);
+
+      uint8_t *pixelsPtr = pixels.get();
+      while (jinfo.output_scanline < jinfo.output_height) {
+        uint8_t *offset = pixelsPtr + jinfo.output_scanline * imageWidth;
+        jpeg_read_scanlines(&jinfo, &offset, 1);
+      }
+      jpeg_finish_decompress(&jinfo);
+      bounds = findBorders(pixels.get(), imageWidth, imageHeight);
+    } catch (std::bad_alloc &ex) {
+      LOGW("Couldn't crop borders on a JPEG image of size %dx%d", imageWidth, imageHeight);
     }
-    bounds = findBorders(pixels.get(), jinfo.image_width, jinfo.image_height);
-    jpeg_finish_decompress(&jinfo);
-  } else {
-    bounds = Rect { .x = 0, .y = 0, .width = jinfo.image_width, .height = jinfo.image_height };
   }
 
-  ImageInfo info {
+  return ImageInfo {
     .imageWidth = jinfo.image_width,
     .imageHeight = jinfo.image_height,
     .isAnimated = false,
     .bounds = bounds
   };
-
-  return info;
 }
 
 void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect, bool rgb565, uint32_t sampleSize) {
