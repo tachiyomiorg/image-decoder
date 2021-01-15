@@ -12,7 +12,7 @@
 #include "decoder_webp.h"
 #include "borders.h"
 
-jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+jint JNI_OnLoad(JavaVM* vm, void*) {
   JNIEnv* env;
   if (vm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_OK) {
     init_java_stream(env);
@@ -43,11 +43,11 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(
     } else if (WebpDecoder::handles(stream->bytes)) {
       decoder = new WebpDecoder(std::move(stream), cropBorders);
     } else {
-      LOGW("No decoder found to handle this stream");
+      LOGE("No decoder found to handle this stream");
       return nullptr;
     }
   } catch (std::exception &ex) {
-    LOGW("%s", ex.what());
+    LOGE("%s", ex.what());
     return nullptr;
   }
 
@@ -91,6 +91,7 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
   uint8_t* pixels;
   AndroidBitmap_lockPixels(env, bitmap, (void**) &pixels);
   if (!pixels) {
+    LOGE("Failed to lock pixels");
     return nullptr;
   }
 
@@ -108,7 +109,7 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_tachiyomi_decoder_ImageDecoder_nativeRecycle(JNIEnv* env, jobject, jlong decoderPtr) {
+Java_tachiyomi_decoder_ImageDecoder_nativeRecycle(JNIEnv*, jobject, jlong decoderPtr) {
   auto* decoder = (BaseDecoder*) decoderPtr;
   delete decoder;
 }

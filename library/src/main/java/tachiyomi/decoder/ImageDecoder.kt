@@ -8,7 +8,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
-data class ImageDecoder(
+class ImageDecoder private constructor(
   private val nativePtr: Long,
   val width: Int,
   val height: Int
@@ -103,7 +103,7 @@ data class ImageDecoder(
       stream: InputStream,
       cropBorders: Boolean = false,
     ) : ImageDecoder? {
-      return nativeNewInstance(stream, cropBorders)
+      return stream.use { nativeNewInstance(it, cropBorders) }
     }
 
     @JvmStatic

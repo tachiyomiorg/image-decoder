@@ -8,22 +8,13 @@
 #define CONTAINER_DEFAULT_SIZE (BUFFER_SIZE * 50)
 
 static jmethodID readMethod;
-static jmethodID closeMethod;
 static jmethodID availableMethod;
 
 void init_java_stream(JNIEnv* env) {
   jclass streamCls = env->FindClass("java/io/InputStream");
   readMethod = env->GetMethodID(streamCls, "read", "([BII)I");
-  closeMethod = env->GetMethodID(streamCls, "close", "()V");
   availableMethod = env->GetMethodID(streamCls, "available", "()I");
   env->DeleteLocalRef(streamCls);
-}
-
-void close_java_stream(JNIEnv* env, jobject stream) {
-  env->CallVoidMethod(stream, closeMethod);
-  if (env->ExceptionCheck()) {
-    env->ExceptionClear();
-  }
 }
 
 std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
@@ -74,11 +65,9 @@ std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
     goto fail;
   }
 
-  close_java_stream(env, jstream);
   return std::make_unique<Stream>(stream, streamOffset);
 
 fail:
   free(stream);
-  close_java_stream(env, jstream);
   return nullptr;
 }

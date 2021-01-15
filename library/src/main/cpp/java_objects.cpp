@@ -9,13 +9,11 @@ static jmethodID imageDecoderCtor;
 static jmethodID createBitmapMethod;
 
 void init_java_objects(JNIEnv* env) {
-  jclass tmp;
-  tmp = env->FindClass("tachiyomi/decoder/ImageDecoder");
-  imageDecoderCls = (jclass) env->NewGlobalRef(tmp);
+  jclass tmpDecoderCls = env->FindClass("tachiyomi/decoder/ImageDecoder");
+  imageDecoderCls = (jclass) env->NewGlobalRef(tmpDecoderCls);
   imageDecoderCtor = env->GetMethodID(imageDecoderCls, "<init>", "(JII)V");
   createBitmapMethod = env->GetStaticMethodID(imageDecoderCls, "createBitmap", "(IIZ)Landroid/graphics/Bitmap;");
-
-  env->DeleteLocalRef(tmp);
+  env->DeleteLocalRef(tmpDecoderCls);
 }
 
 jobject create_image_decoder(JNIEnv* env, jlong decoderPtr, jint width, jint height) {
