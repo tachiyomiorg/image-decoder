@@ -26,10 +26,10 @@ data class ImageDecoder(
     rgb565: Boolean = true,
     sampleSize: Int = 1
   ): Bitmap? {
+    checkValidInput(region, sampleSize)
     return try {
       lock.read {
         decoding.incrementAndGet()
-        checkRegionBounds(region.left, region.top, region.width(), region.height())
         require(!isRecycled) { "The decoder has been recycled" }
       }
       nativeDecode(
@@ -44,13 +44,22 @@ data class ImageDecoder(
     }
   }
 
-  private fun checkRegionBounds(x: Int, y: Int, width: Int, height: Int) {
+  private fun checkValidInput(region: Rect, sampleSize: Int) {
+    val x = region.left
+    val y = region.top
+    val width = region.width()
+    val height = region.height()
+
     if (x < 0 || x > this.width ||
       y < 0 || y > this.height ||
       width <= 0 || width + x > this.width ||
       height <= 0 || height + y > this.height
     ) {
       throw IllegalStateException("Requested region is invalid")
+    }
+
+    if (!(sampleSize > 0 && Integer.bitCount(sampleSize) == 1)) {
+      throw IllegalStateException("Sample size must be a power of 2 but got $sampleSize")
     }
   }
 

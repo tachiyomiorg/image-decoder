@@ -14,11 +14,19 @@
  * limitations under the License.
  */
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "hicpp-signed-bitwise"
+
 #include "row_convert.h"
 
+#define RGB565_BLUE(c) ((c) & 0x1f)
+#define RGB565_GREEN(c1, c2) ((((c1) & 0xe0) >> 5) | (((c2) & 0x7) << 3))
+#define RGB565_REG(c) ((c) >> 3)
+
 void RGBA8888_to_RGBA8888_row_internal_2(
-    uint8_t* dst, const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio) {
+  uint8_t* dst, const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
   uint32_t i;
   uint32_t start = (ratio - 2) / 2 * 4;
   uint32_t interval = ratio * 4;
@@ -48,8 +56,9 @@ void RGBA8888_to_RGBA8888_row_internal_2(
 }
 
 void RGBA8888_to_RGBA8888_row(uint8_t* dst,
-    const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio) {
+  const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
   if (ratio == 1) {
     memcpy(dst, src1, d_width * 4);
   } else {
@@ -57,8 +66,7 @@ void RGBA8888_to_RGBA8888_row(uint8_t* dst,
   }
 }
 
-static void RGBA8888_to_RGB565_row_internal_1(
-    uint8_t* dst, const uint8_t* src, uint32_t width) {
+static void RGBA8888_to_RGB565_row_internal_1(uint8_t* dst, const uint8_t* src, uint32_t width) {
   uint32_t i;
   for (i = 0; i < width; i++) {
     uint8_t r, g, b;
@@ -75,8 +83,9 @@ static void RGBA8888_to_RGB565_row_internal_1(
 }
 
 static void RGBA8888_to_RGB565_row_internal_2(
-    uint8_t* dst, const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio) {
+  uint8_t* dst, const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
   uint32_t i;
   uint32_t start = (ratio - 2) / 2 * 4;
   uint32_t interval = ratio * 4;
@@ -105,11 +114,59 @@ static void RGBA8888_to_RGB565_row_internal_2(
 }
 
 void RGBA8888_to_RGB565_row(uint8_t* dst,
-    const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio) {
+  const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
   if (ratio == 1) {
     RGBA8888_to_RGB565_row_internal_1(dst, src1, d_width);
   } else {
     RGBA8888_to_RGB565_row_internal_2(dst, src1, src2, d_width, ratio);
   }
 }
+
+
+static void RGB565_to_RGB565_row_internal_2(
+  uint8_t* dst, const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
+  uint32_t i;
+  uint32_t start = (ratio - 2) / 2 * 2;
+  uint32_t interval = ratio * 2;
+
+  src1 += start;
+  src2 += start;
+  for (i = 0; i < d_width; i++) {
+    uint8_t r, g, b;
+
+    b = (uint8_t) RGB565_BLUE(src1[0]) + (uint8_t) RGB565_BLUE(src2[0]);
+    g = (uint8_t) RGB565_GREEN(src1[0], src1[1]) + (uint8_t) RGB565_GREEN(src2[0], src2[1]);
+    r = RGB565_REG(src1[1]) + RGB565_REG(src2[1]);
+    b += (uint8_t) RGB565_BLUE(src1[2]) + (uint8_t) RGB565_BLUE(src2[2]);
+    g += (uint8_t) RGB565_GREEN(src1[2], src1[3]) + (uint8_t) RGB565_GREEN(src2[2], src2[3]);
+    r += RGB565_REG(src1[3]) + RGB565_REG(src2[3]);
+
+    b /= 4;
+    g /= 4;
+    r /= 4;
+
+    dst[0] = b | g << 5;
+    dst[1] = g >> 3 | r << 3;
+
+    src1 += interval;
+    src2 += interval;
+    dst += 2;
+  }
+}
+
+void RGB565_to_RGB565_row(uint8_t* dst,
+  const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
+  if (ratio == 1) {
+    memcpy(dst, src1, d_width * 2);
+  } else {
+    RGB565_to_RGB565_row_internal_2(dst, src1, src2, d_width, ratio);
+  }
+}
+
+#pragma clang diagnostic pop

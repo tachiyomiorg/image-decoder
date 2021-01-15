@@ -18,10 +18,22 @@ struct Rect {
       return *this;
     }
     return {
-      .x = x,
-      .y = y,
+      .x = x / scale,
+      .y = y / scale,
       .width = width / scale,
       .height = height / scale,
+    };
+  }
+
+  Rect upsample(uint32_t scale) {
+    if (scale == 1) {
+      return *this;
+    }
+    return {
+      .x = x * scale,
+      .y = y * scale,
+      .width = width * scale,
+      .height = height * scale,
     };
   }
 };
