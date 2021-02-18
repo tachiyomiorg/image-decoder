@@ -14,8 +14,8 @@ add_library(imagedecoder SHARED
     row_convert.cpp
 )
 
-include(cmake/libjpeg-turbo.cmake)
-include(cmake/libpng.cmake)
-include(cmake/libwebp.cmake)
+include(libjpeg-turbo/libjpeg-turbo.cmake)
+include(libpng/libpng.cmake)
+include(libwebp/libwebp.cmake)
 
 target_link_libraries(imagedecoder android jnigraphics log)
