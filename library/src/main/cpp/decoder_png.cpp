@@ -86,11 +86,11 @@ ImageInfo PngDecoder::parseInfo() {
       if (bitDepth == 16) {
         png_set_scale_16(png);
       }
-      if (colorType & (uint8_t) PNG_COLOR_MASK_ALPHA) {
-        png_set_strip_alpha(png);
-      }
       if (colorType & (uint8_t) PNG_COLOR_MASK_COLOR) {
         png_set_rgb_to_gray(png, 1, -1, -1);
+        png_set_strip_alpha(png);
+      } else if (colorType & (uint8_t) PNG_COLOR_MASK_ALPHA) {
+        png_set_strip_alpha(png);
       }
 
       int32_t passes = png_set_interlace_handling(png);
@@ -129,14 +129,13 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
   if (bitDepth == 16) {
     png_set_scale_16(png);
   }
-
   if (colorType == PNG_COLOR_TYPE_GRAY || colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
     png_set_gray_to_rgb(png);
   }
-
   if (!(colorType & (uint8_t) PNG_COLOR_MASK_ALPHA)) {
     png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
   }
+
   int32_t passes = png_set_interlace_handling(png);
 
   uint32_t inComponents = 4; // RGB565 is not supported by libpng
