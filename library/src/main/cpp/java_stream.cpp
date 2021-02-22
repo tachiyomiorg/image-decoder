@@ -25,6 +25,12 @@ std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
   uint32_t streamReservedSize = available > 0 ? available : CONTAINER_DEFAULT_SIZE;
   uint32_t streamOffset = 0;
 
+  // Make sure the stream didn't throw an exception before env calls
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    goto fail;
+  }
+
   buffer = env->NewByteArray(BUFFER_SIZE);
   if (!buffer) {
     goto fail;
