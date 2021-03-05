@@ -22,7 +22,7 @@ std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
   uint8_t* stream = nullptr;
 
   int available = env->CallIntMethod(jstream, availableMethod);
-  uint32_t streamReservedSize = available > 0 ? available : CONTAINER_DEFAULT_SIZE;
+  uint32_t streamReservedSize = available > BUFFER_SIZE ? available : CONTAINER_DEFAULT_SIZE;
   uint32_t streamOffset = 0;
 
   // Make sure the stream didn't throw an exception before env calls
@@ -52,7 +52,7 @@ std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
     if (read < 0) {
       break;
     }
-    if (streamReservedSize < streamOffset + read) {
+    while (streamReservedSize < streamOffset + read) {
       streamReservedSize = (int) (streamReservedSize * 1.5);
       auto* tmp = (uint8_t*) realloc(stream, streamReservedSize);
       if (!tmp) {
