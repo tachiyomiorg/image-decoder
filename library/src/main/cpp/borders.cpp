@@ -18,7 +18,7 @@ bool inline isWhitePixel(const uint8_t* pixels, uint32_t width, uint32_t x, uint
 /** Return the first x position where there is a substantial amount of fill,
  * starting the search from the left. */
 uint32_t findBorderLeft(uint8_t* pixels, uint32_t width, uint32_t height, uint32_t top, uint32_t bottom) {
-  uint32_t x, y;
+  int x, y;
   const auto filledLimit = (uint32_t) round(height * filledRatioLimit / 2);
 
   // Scan first line to detect dominant color
@@ -64,7 +64,7 @@ uint32_t findBorderLeft(uint8_t* pixels, uint32_t width, uint32_t height, uint32
 /** Return the first x position where there is a substantial amount of fill,
  * starting the search from the right. */
 uint32_t findBorderRight(uint8_t* pixels, uint32_t width, uint32_t height, uint32_t top, uint32_t bottom) {
-  uint32_t x, y;
+  int x, y;
   const auto filledLimit = (uint32_t) round(height * filledRatioLimit / 2);
 
   // Scan first line to detect dominant color
@@ -111,7 +111,7 @@ uint32_t findBorderRight(uint8_t* pixels, uint32_t width, uint32_t height, uint3
 /** Return the first y position where there is a substantial amount of fill,
  * starting the search from the top. */
 uint32_t findBorderTop(uint8_t* pixels, uint32_t width, uint32_t height) {
-  uint32_t x, y;
+  int x, y;
   const auto filledLimit = (uint32_t) round(width * filledRatioLimit / 2);
 
   // Scan first line to detect dominant color
@@ -157,7 +157,7 @@ uint32_t findBorderTop(uint8_t* pixels, uint32_t width, uint32_t height) {
 /** Return the first y position where there is a substantial amount of fill,
  * starting the search from the bottom. */
 uint32_t findBorderBottom(uint8_t* pixels, uint32_t width, uint32_t height) {
-  uint32_t x, y;
+  int x, y;
   const auto filledLimit = (uint32_t) round(width * filledRatioLimit / 2);
 
   // Scan first line to detect dominant color
