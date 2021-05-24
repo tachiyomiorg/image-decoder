@@ -23,9 +23,10 @@ ImageInfo WebpDecoder::parseInfo() {
 
   uint32_t imageWidth = features.width;
   uint32_t imageHeight = features.height;
+  bool isAnimated = features.has_animation;
 
   Rect bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
-  if (cropBorders) {
+  if (!isAnimated && cropBorders) {
     int iw = features.width;
     int ih = features.height;
     uint8_t *u, *v;
@@ -42,7 +43,7 @@ ImageInfo WebpDecoder::parseInfo() {
   return ImageInfo {
     .imageWidth = imageWidth,
     .imageHeight = imageHeight,
-    .isAnimated = false,
+    .isAnimated = isAnimated,
     .bounds = bounds
   };
 }
@@ -63,7 +64,7 @@ void WebpDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb
   config.options.scaled_width = outRect.width;
   config.options.scaled_height = outRect.height;
 
-  // Set colorpsace and stride params
+  // Set colorspace and stride params
   uint32_t outStride = outRect.width * (rgb565 ? 2 : 4);
   config.output.colorspace = rgb565 ? MODE_RGB_565 : MODE_RGBA;
   config.output.u.RGBA.rgba = outPixels;
@@ -71,8 +72,23 @@ void WebpDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb
   config.output.u.RGBA.stride = outStride;
   config.output.is_external_memory = 1;
 
-  VP8StatusCode code = WebPDecode(stream->bytes, stream->size, &config);
+  VP8StatusCode code;
+  if (!info.isAnimated) {
+    code = WebPDecode(stream->bytes, stream->size, &config);
+  } else {
+    WebPData data = {.bytes = stream->bytes, .size = stream->size};
+    auto demuxer = std::unique_ptr<WebPDemuxer, decltype(&WebPDemuxDelete)> {
+      WebPDemux(&data),
+      WebPDemuxDelete
+    };
 
+    WebPIterator iterator;
+    if (!WebPDemuxGetFrame(demuxer.get(), 1, &iterator)) {
+      throw std::runtime_error("Failed to init iterator");
+    }
+    code = WebPDecode(iterator.fragment.bytes, iterator.fragment.size, &config);
+    WebPDemuxReleaseIterator(&iterator);
+  }
   if (code != VP8_STATUS_OK) {
     throw std::runtime_error("Failed to decode image");
   }

@@ -8,6 +8,7 @@
 #include "decoder_base.h"
 #include "stream.h"
 #include <src/webp/decode.h>
+#include <src/webp/demux.h>
 
 class WebpDecoder: public BaseDecoder {
 public:

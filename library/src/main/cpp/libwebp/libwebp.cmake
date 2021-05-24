@@ -23,4 +23,4 @@ option(WEBP_ENABLE_SWAP_16BIT_CSP "" ON)
 FetchContent_MakeAvailable(libwebp)
 
 include_directories(${libwebp_BINARY_DIR} ${libwebp_SOURCE_DIR})
-target_link_libraries(imagedecoder webpdecoder)
+target_link_libraries(imagedecoder webpdecoder webpdemux)
