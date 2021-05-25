@@ -106,11 +106,18 @@ class ImageDecoder private constructor(
       return stream.use { nativeNewInstance(it, cropBorders) }
     }
 
+    fun findType(bytes: ByteArray): ImageType? {
+      return nativeFindType(bytes)
+    }
+
     @JvmStatic
     private external fun nativeNewInstance(
       stream: InputStream,
       cropBorders: Boolean = false,
     ) : ImageDecoder?
+
+    @JvmStatic
+    private external fun nativeFindType(bytes: ByteArray): ImageType?
 
     @JvmStatic
     private fun createBitmap(width: Int, height: Int, rgb565: Boolean): Bitmap? {

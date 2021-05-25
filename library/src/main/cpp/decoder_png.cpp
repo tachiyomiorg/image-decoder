@@ -27,6 +27,8 @@ PngDecodeSession::PngDecodeSession(Stream* stream) : png(nullptr), pinfo(nullptr
   reader({ .bytes = stream->bytes, .read = 0, .remain = stream->size }) {
 }
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "EndlessLoop"
 void PngDecodeSession::init() {
   auto errorFn = [](png_struct*, png_const_charp msg) {
     throw std::runtime_error(msg);
@@ -55,6 +57,7 @@ void PngDecodeSession::init() {
   png_set_read_fn(png, &reader, readFn);
   png_read_info(png, pinfo);
 }
+#pragma clang diagnostic pop
 
 PngDecodeSession::~PngDecodeSession() {
   png_destroy_read_struct(&png, &pinfo, nullptr);

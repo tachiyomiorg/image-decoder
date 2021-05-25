@@ -10,6 +10,7 @@
 #include "decoder_jpeg.h"
 #include "decoder_png.h"
 #include "decoder_webp.h"
+#include "decoder_gif.h"
 #include "borders.h"
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -112,4 +113,43 @@ JNIEXPORT void JNICALL
 Java_tachiyomi_decoder_ImageDecoder_nativeRecycle(JNIEnv*, jobject, jlong decoderPtr) {
   auto* decoder = (BaseDecoder*) decoderPtr;
   delete decoder;
+}
+
+extern "C"
+JNIEXPORT jobject JNICALL
+Java_tachiyomi_decoder_ImageDecoder_nativeFindType(
+  JNIEnv* env, jclass, jbyteArray array
+) {
+  uint32_t size = env->GetArrayLength(array);
+
+  if (size < 4) {
+    LOGW("Not enough bytes to parse info");
+    return nullptr;
+  }
+
+  auto bytes = (uint8_t*) env->GetByteArrayElements(array, nullptr);
+
+  jobject imageType = nullptr;
+  if (JpegDecoder::handles(bytes)) {
+    imageType = create_image_type(env, 0, false);
+  } else if (PngDecoder::handles(bytes)) {
+    imageType = create_image_type(env, 1, false);
+  } else if (WebpDecoder::handles(bytes)) {
+    try {
+      auto stream = std::make_unique<Stream>(bytes, size);
+      auto decoder = std::make_unique<WebpDecoder>(std::move(stream), false);
+      imageType = create_image_type(env, 2, decoder->info.isAnimated);
+    } catch (std::exception &ex) {
+      LOGW("Failed to parse WebP header. Falling back to non animated WebP");
+      imageType = create_image_type(env, 2, false);
+    }
+  } else if (GifDecoder::handles(bytes)) {
+    imageType = create_image_type(env, 3, true);
+  } else {
+    LOGW("Failed to find image type");
+  }
+
+  env->ReleaseByteArrayElements(array, (jbyte*) bytes, 0);
+
+  return imageType;
 }
