@@ -11,7 +11,7 @@
 class GifDecoder {
 public:
   static bool handles(const uint8_t* stream) {
-    return stream[0] == 0xFF && stream[1] == 0xD8 && stream[2] == 0xFF;
+    return stream[0] == 0x47 && stream[1] == 0x49 && stream[2] == 0x46 && stream[3] == 0x38;
   }
 };
 
