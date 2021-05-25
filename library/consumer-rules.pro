@@ -1,2 +1,5 @@
 -keep class tachiyomi.decoder.ImageDecoder { *; }
 -keep class tachiyomi.decoder.ImageDecoder$Companion { *; }
+-keep class tachiyomi.decoder.ImageType { *; }
+-keep class tachiyomi.decoder.Format { *; }
+-keep class tachiyomi.decoder.Format$Companion { *; }
