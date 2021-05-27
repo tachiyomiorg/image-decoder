@@ -11,6 +11,7 @@
 #include "decoder_png.h"
 #include "decoder_webp.h"
 #include "decoder_gif.h"
+#include "decoder_heif.h"
 #include "borders.h"
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -43,6 +44,8 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(
       decoder = new PngDecoder(std::move(stream), cropBorders);
     } else if (WebpDecoder::handles(stream->bytes)) {
       decoder = new WebpDecoder(std::move(stream), cropBorders);
+    } else if (HeifDecoder::handles(stream->bytes)) {
+      decoder = new HeifDecoder(std::move(stream), cropBorders);
     } else {
       LOGE("No decoder found to handle this stream");
       return nullptr;
@@ -145,6 +148,8 @@ Java_tachiyomi_decoder_ImageDecoder_nativeFindType(
     }
   } else if (GifDecoder::handles(bytes)) {
     imageType = create_image_type(env, 3, true);
+  } else if (HeifDecoder::handles(bytes)) {
+    imageType = create_image_type(env, 4, false);
   } else {
     LOGW("Failed to find image type");
   }

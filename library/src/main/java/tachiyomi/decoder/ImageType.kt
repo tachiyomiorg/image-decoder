@@ -13,7 +13,7 @@ data class ImageType internal constructor(
 }
 
 enum class Format {
-  Jpeg, Png, Webp, Gif;
+  Jpeg, Png, Webp, Gif, Heif, Avif;
 
   internal companion object {
     fun from(value: Int): Format {
@@ -23,6 +23,8 @@ enum class Format {
         1 -> Png
         2 -> Webp
         3 -> Gif
+        4 -> Heif
+        5 -> Avif
         else -> error("Invalid format code")
       }
     }

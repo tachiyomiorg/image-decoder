@@ -6,11 +6,11 @@ set(CMAKE_BUILD_TYPE Release)
 FetchContent_Declare(libjpeg-turbo
   GIT_REPOSITORY  https://github.com/libjpeg-turbo/libjpeg-turbo
   GIT_TAG         2.0.90
-  PATCH_COMMAND   git apply --reject
+  PATCH_COMMAND   git apply
     ${CMAKE_CURRENT_LIST_DIR}/01-decode-cmyk-to-rgb.patch
     ${CMAKE_CURRENT_LIST_DIR}/02-decode-ycck-to-rgb.patch
     ${CMAKE_CURRENT_LIST_DIR}/03-decode-cmyk-to-rgb565.patch
-    ${CMAKE_CURRENT_LIST_DIR}/04-decode-ycck-to-rgb565.patch
+    ${CMAKE_CURRENT_LIST_DIR}/04-decode-ycck-to-rgb565.patch || true
 )
 
 option(WITH_JPEG8 "" 1)
