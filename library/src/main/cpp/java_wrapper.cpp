@@ -139,7 +139,10 @@ Java_tachiyomi_decoder_ImageDecoder_nativeFindType(
     imageType = create_image_type(env, 1, false);
   } else if (WebpDecoder::handles(bytes)) {
     try {
-      auto stream = std::make_unique<Stream>(bytes, size);
+      // Create a copy of the bytes, as the decoder would take ownership of the java bytearray
+      auto bytesCopy = (uint8_t*) malloc(size); // malloc rather than new because Stream uses C API
+      memcpy(bytesCopy, bytes, size);
+      auto stream = std::make_unique<Stream>(bytesCopy, size);
       auto decoder = std::make_unique<WebpDecoder>(std::move(stream), false);
       imageType = create_image_type(env, 2, decoder->info.isAnimated);
     } catch (std::exception &ex) {
