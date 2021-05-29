@@ -6,7 +6,6 @@
 #define IMAGEDECODER_DECODER_HEIF_H
 
 #include "decoder_base.h"
-#include <libheif/heif.h>
 
 class HeifDecoder: public BaseDecoder {
 public:
