@@ -11,7 +11,7 @@
 
 class WebpDecoder: public BaseDecoder {
 public:
-  WebpDecoder(std::unique_ptr<Stream>&& stream, bool cropBorders);
+  WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
   static bool handles(const uint8_t* stream);
 
   void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize);

@@ -41,7 +41,7 @@ auto init_heif_context(Stream* stream) {
 }
 
 HeifDecoder::HeifDecoder(
-  std::unique_ptr<Stream>&& stream,
+  std::shared_ptr<Stream>&& stream,
   bool cropBorders
 ) : BaseDecoder(std::move(stream), cropBorders) {
   this->info = parseInfo();

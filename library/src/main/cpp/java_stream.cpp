@@ -17,7 +17,7 @@ void init_java_stream(JNIEnv* env) {
   env->DeleteLocalRef(streamCls);
 }
 
-std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
+std::shared_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
   jbyteArray buffer;
   uint8_t* stream = nullptr;
 
@@ -71,7 +71,9 @@ std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream) {
     goto fail;
   }
 
-  return std::make_unique<Stream>(stream, streamOffset);
+  return std::shared_ptr<Stream>(new Stream(stream, streamOffset),
+    [](Stream* stream) { free(stream->bytes); delete stream; }
+  );
 
 fail:
   free(stream);

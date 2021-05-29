@@ -9,7 +9,7 @@ bool WebpDecoder::handles(const uint8_t* stream) {
 }
 
 WebpDecoder::WebpDecoder(
-  std::unique_ptr<Stream>&& stream,
+  std::shared_ptr<Stream>&& stream,
   bool cropBorders
 ) : BaseDecoder(std::move(stream), cropBorders) {
   this->info = parseInfo();

@@ -17,7 +17,7 @@ struct ImageInfo {
 
 class BaseDecoder {
 public:
-  BaseDecoder(std::unique_ptr<Stream>&& stream, bool cropBorders) {
+  BaseDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders) {
     this->stream = std::move(stream);
     this->cropBorders = cropBorders;
   }
@@ -26,7 +26,7 @@ public:
   virtual void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize) = 0;
 
 protected:
-  std::unique_ptr<Stream> stream;
+  std::shared_ptr<Stream> stream;
 
 public:
   bool cropBorders;

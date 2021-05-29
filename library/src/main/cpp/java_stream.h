@@ -13,6 +13,6 @@
 
 void init_java_stream(JNIEnv* env);
 
-std::unique_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream);
+std::shared_ptr<Stream> read_all_java_stream(JNIEnv* env, jobject jstream);
 
 #endif //IMAGEDECODER_JAVA_STREAM_H

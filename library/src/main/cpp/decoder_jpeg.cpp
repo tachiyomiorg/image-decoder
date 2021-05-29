@@ -11,7 +11,7 @@ bool JpegDecoder::handles(const uint8_t* stream) {
 }
 
 JpegDecoder::JpegDecoder(
-  std::unique_ptr<Stream>&& stream,
+  std::shared_ptr<Stream>&& stream,
   bool cropBorders
 ) : BaseDecoder(std::move(stream), cropBorders) {
   this->info = parseInfo();
