@@ -1,7 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
 include(FetchContent)
-
-set(CMAKE_BUILD_TYPE Release)
 
 FetchContent_Declare(libpng
   GIT_REPOSITORY  https://github.com/glennrp/libpng

@@ -1,7 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
 include(FetchContent)
-
-set(CMAKE_BUILD_TYPE Release)
 
 FetchContent_Declare(libwebp
   GIT_REPOSITORY  https://chromium.googlesource.com/webm/libwebp
