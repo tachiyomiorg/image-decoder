@@ -6,34 +6,6 @@
 #include <libheif/heif_cxx.h>
 #include "row_convert.h"
 
-static const uint8_t magic[] =
-  {'f', 't', 'y', 'p'};
-
-static const uint8_t brands[][4] = {
-  {'h', 'e', 'i', 'c'},
-  {'h', 'e', 'i', 'x'},
-  {'h', 'e', 'v', 'c'},
-  {'h', 'e', 'i', 'm'},
-  {'h', 'e', 'i', 's'},
-  {'h', 'e', 'v', 'm'},
-  {'h', 'e', 'v', 's'},
-  {'m', 'i', 'f', '1'},
-  {'m', 's', 'f', '1'}
-};
-
-bool HeifDecoder::handles(const uint8_t* stream) {
-  if (memcmp(stream + 4, magic, 4) != 0) {
-    return false;
-  }
-
-  for (uint32_t i = 0; i < sizeof(brands); i++) {
-    if (memcmp(stream + 8, brands[i], 4) == 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
 auto init_heif_context(Stream* stream) {
   auto ctx = heif::Context();
   ctx.read_from_memory_without_copy(stream->bytes, stream->size);
@@ -62,6 +34,8 @@ ImageInfo HeifDecoder::parseInfo() {
       bounds = findBorders(pixels, imageWidth, imageHeight);
     } catch (std::exception &ex) {
       LOGW("Couldn't crop borders on a HEIF/AVIF image of size %dx%d", imageWidth, imageHeight);
+    } catch (heif::Error& error) {
+      throw std::runtime_error(error.get_message());
     }
   }
 
@@ -75,9 +49,14 @@ ImageInfo HeifDecoder::parseInfo() {
 
 void HeifDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize) {
   // Decode full image (regions, subsamples or row by row are not supported sadly)
-  auto ctx = init_heif_context(stream.get());
-  auto handle = ctx.get_primary_image_handle();
-  auto img = handle.decode_image(heif_colorspace_RGB, heif_chroma_interleaved_RGBA);
+  heif::Image img;
+  try {
+    auto ctx = init_heif_context(stream.get());
+    auto handle = ctx.get_primary_image_handle();
+    img = handle.decode_image(heif_colorspace_RGB, heif_chroma_interleaved_RGBA);
+  } catch (heif::Error& error) {
+    throw std::runtime_error(error.get_message());
+  }
 
   int stride;
   const uint8_t* inPixels = img.get_plane(heif_channel_interleaved, &stride);

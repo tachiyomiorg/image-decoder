@@ -11,5 +11,5 @@ option(PNG_TESTS "" OFF)
 
 FetchContent_MakeAvailable(libpng)
 
-include_directories(${libpng_BINARY_DIR} ${libpng_SOURCE_DIR})
+target_include_directories(imagedecoder PRIVATE ${libpng_BINARY_DIR} ${libpng_SOURCE_DIR})
 target_link_libraries(imagedecoder png_static z)

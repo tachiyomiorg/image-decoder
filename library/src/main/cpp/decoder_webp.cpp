@@ -4,10 +4,6 @@
 
 #include "decoder_webp.h"
 
-bool WebpDecoder::handles(const uint8_t* stream) {
-  return stream[0] == 0x52 && stream[1] == 0x49 && stream[2] == 0x46 && stream[3] == 0x46;
-}
-
 WebpDecoder::WebpDecoder(
   std::shared_ptr<Stream>&& stream,
   bool cropBorders

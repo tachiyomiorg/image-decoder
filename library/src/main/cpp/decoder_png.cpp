@@ -12,10 +12,6 @@ static void png_skip_rows(png_structrp png_ptr, png_uint_32 num_rows) {
   }
 }
 
-bool PngDecoder::handles(const uint8_t* stream) {
-  return stream[0] == 0x89 && stream[1] == 0x50 && stream[2] == 0x4E && stream[3] == 0x47;
-}
-
 PngDecoder::PngDecoder(
   std::shared_ptr<Stream>&& stream,
   bool cropBorders

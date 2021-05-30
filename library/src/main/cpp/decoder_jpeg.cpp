@@ -6,10 +6,6 @@
 #include <algorithm>
 #include "row_convert.h"
 
-bool JpegDecoder::handles(const uint8_t* stream) {
-  return stream[0] == 0xFF && stream[1] == 0xD8 && stream[2] == 0xFF;
-}
-
 JpegDecoder::JpegDecoder(
   std::shared_ptr<Stream>&& stream,
   bool cropBorders

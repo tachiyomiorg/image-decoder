@@ -6,12 +6,7 @@
 #include <android/bitmap.h>
 #include "java_stream.h"
 #include "java_objects.h"
-#include "decoder_base.h"
-#include "decoder_jpeg.h"
-#include "decoder_png.h"
-#include "decoder_webp.h"
-#include "decoder_gif.h"
-#include "decoder_heif.h"
+#include "decoders.h"
 #include "borders.h"
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -38,15 +33,28 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(
 
   BaseDecoder* decoder;
   try {
-    if (JpegDecoder::handles(stream->bytes)) {
+    if (false) {} // This should be optimized out by the compiler.
+#ifdef HAVE_LIBJPEG
+    else if (is_jpeg(stream->bytes)) {
       decoder = new JpegDecoder(std::move(stream), cropBorders);
-    } else if (PngDecoder::handles(stream->bytes)) {
+    }
+#endif
+#ifdef HAVE_LIBPNG
+    else if (is_png(stream->bytes)) {
       decoder = new PngDecoder(std::move(stream), cropBorders);
-    } else if (WebpDecoder::handles(stream->bytes)) {
+    }
+#endif
+#ifdef HAVE_LIBWEBP
+    else if (is_webp(stream->bytes)) {
       decoder = new WebpDecoder(std::move(stream), cropBorders);
-    } else if (HeifDecoder::handles(stream->bytes)) {
+    }
+#endif
+#ifdef HAVE_LIBHEIF
+    else if (is_heif(stream->bytes)) {
       decoder = new HeifDecoder(std::move(stream), cropBorders);
-    } else {
+    }
+#endif
+    else {
       LOGE("No decoder found to handle this stream");
       return nullptr;
     }
@@ -133,22 +141,26 @@ Java_tachiyomi_decoder_ImageDecoder_nativeFindType(
   auto bytes = (uint8_t*) env->GetByteArrayElements(array, nullptr);
 
   jobject imageType = nullptr;
-  if (JpegDecoder::handles(bytes)) {
+  if (is_jpeg(bytes)) {
     imageType = create_image_type(env, 0, false);
-  } else if (PngDecoder::handles(bytes)) {
+  } else if (is_png(bytes)) {
     imageType = create_image_type(env, 1, false);
-  } else if (WebpDecoder::handles(bytes)) {
+  } else if (is_webp(bytes)) {
     try {
+#ifdef HAVE_LIBWEBP
       auto stream = std::make_unique<Stream>(bytes, size);
       auto decoder = std::make_unique<WebpDecoder>(std::move(stream), false);
       imageType = create_image_type(env, 2, decoder->info.isAnimated);
+#else
+      throw std::runtime_error("WebP decoder not available");
+#endif
     } catch (std::exception &ex) {
       LOGW("Failed to parse WebP header. Falling back to non animated WebP");
       imageType = create_image_type(env, 2, false);
     }
-  } else if (GifDecoder::handles(bytes)) {
+  } else if (is_gif(bytes)) {
     imageType = create_image_type(env, 3, true);
-  } else if (HeifDecoder::handles(bytes)) {
+  } else if (is_heif(bytes)) {
     imageType = create_image_type(env, 4, false);
   } else {
     LOGW("Failed to find image type");
