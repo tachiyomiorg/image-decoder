@@ -53,7 +53,8 @@ void HeifDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb
   try {
     auto ctx = init_heif_context(stream.get());
     auto handle = ctx.get_primary_image_handle();
-    img = handle.decode_image(heif_colorspace_RGB, heif_chroma_interleaved_RGBA);
+    auto chroma = rgb565 ? heif_chroma_interleaved_RGB : heif_chroma_interleaved_RGBA;
+    img = handle.decode_image(heif_colorspace_RGB, chroma);
   } catch (heif::Error& error) {
     throw std::runtime_error(error.get_message());
   }
@@ -63,7 +64,7 @@ void HeifDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb
 
   // Calculate stride of the decoded image with the requested region
   uint32_t inStride = stride;
-  uint32_t inStrideOffset = inRect.x * 4;
+  uint32_t inStrideOffset = inRect.x * (stride / info.imageWidth);
   auto inPixelsPos = (uint8_t*) inPixels + inStride * inRect.y;
 
   // Calculate output stride
@@ -71,8 +72,7 @@ void HeifDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb
   uint8_t* outPixelsPos = outPixels;
 
   // Set row conversion function
-  // TODO if we add a RGB888 to RG565 we'd save 1/4 of memory
-  auto rowFn = rgb565 ? &RGBA8888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
+  auto rowFn = rgb565 ? &RGB888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
 
   if (sampleSize == 1) {
     for (uint32_t i = 0; i < outRect.height; i++) {

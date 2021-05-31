@@ -169,4 +169,62 @@ void RGB565_to_RGB565_row(uint8_t* dst,
   }
 }
 
+static void RGB888_to_RGB565_row_internal_1(uint8_t* dst, const uint8_t* src, uint32_t width) {
+  uint32_t i;
+  for (i = 0; i < width; i++) {
+    uint8_t r, g, b;
+    r = src[0] >> 3;
+    g = src[1] >> 2;
+    b = src[2] >> 3;
+
+    dst[0] = (uint8_t) (g << 5 | b);
+    dst[1] = (uint8_t) (r << 3 | g >> 3);
+
+    src += 3;
+    dst += 2;
+  }
+}
+
+static void RGB888_to_RGB565_row_internal_2(
+  uint8_t* dst, const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
+  uint32_t i;
+  uint32_t start = (ratio - 2) / 2 * 3;
+  uint32_t interval = ratio * 3;
+
+  src1 += start;
+  src2 += start;
+  for (i = 0; i < d_width; i++) {
+    uint16_t r, g, b;
+    r = src1[0] + src2[0];
+    g = src1[1] + src2[1];
+    b = src1[2] + src2[2];
+    r += src1[3] + src2[3];
+    g += src1[4] + src2[4];
+    b += src1[5] + src2[5];
+    r = (uint16_t) ((r / 4) >> 3);
+    g = (uint16_t) ((g / 4) >> 2);
+    b = (uint16_t) ((b / 4) >> 3);
+
+    dst[0] = (uint8_t) (g << 5 | b);
+    dst[1] = (uint8_t) (r << 3 | g >> 3);
+
+    src1 += interval;
+    src2 += interval;
+    dst += 2;
+  }
+}
+
+void RGB888_to_RGB565_row(uint8_t* dst,
+  const uint8_t* src1, const uint8_t* src2,
+  uint32_t d_width, uint32_t ratio
+) {
+  if (ratio == 1) {
+    RGB888_to_RGB565_row_internal_1(dst, src1, d_width);
+  } else {
+    RGB888_to_RGB565_row_internal_2(dst, src1, src2, d_width, ratio);
+  }
+}
+
 #pragma clang diagnostic pop

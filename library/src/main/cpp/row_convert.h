@@ -33,4 +33,8 @@ void RGB565_to_RGB565_row(uint8_t* dst,
     const uint8_t* src1, const uint8_t* src2,
     uint32_t d_width, uint32_t ratio);
 
+void RGB888_to_RGB565_row(uint8_t* dst,
+    const uint8_t* src1, const uint8_t* src2,
+    uint32_t d_width, uint32_t ratio);
+
 #endif //IMAGE_IMAGE_CONVERT_H
