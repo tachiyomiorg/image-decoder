@@ -7,7 +7,7 @@ FetchContent_Declare(libjpeg-turbo
     ${CMAKE_CURRENT_LIST_DIR}/01-decode-cmyk-to-rgb.patch
     ${CMAKE_CURRENT_LIST_DIR}/02-decode-ycck-to-rgb.patch
     ${CMAKE_CURRENT_LIST_DIR}/03-decode-cmyk-to-rgb565.patch
-    ${CMAKE_CURRENT_LIST_DIR}/04-decode-ycck-to-rgb565.patch
+    ${CMAKE_CURRENT_LIST_DIR}/04-decode-ycck-to-rgb565.patch || true
 )
 
 option(WITH_JPEG8 "" 1)
