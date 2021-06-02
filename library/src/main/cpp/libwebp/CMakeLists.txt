@@ -1,8 +1,8 @@
-include(FetchContent)
-
 FetchContent_Declare(libwebp
   GIT_REPOSITORY  https://chromium.googlesource.com/webm/libwebp
   GIT_TAG         v1.1.0
+  BINARY_DIR      build
+  SUBBUILD_DIR    subbuild
 )
 
 option(WEBP_BUILD_ANIM_UTILS "" OFF)

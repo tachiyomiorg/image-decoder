@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 project(imagedecoder C CXX ASM)
+include(FetchContent)
 
 set(CMAKE_BUILD_TYPE Release)
 
@@ -16,6 +17,10 @@ add_library(imagedecoder SHARED
   borders.cpp
   row_convert.cpp
 )
+
+# Change the default path of fetch content to avoid downloading the same dependencies per architecture
+get_filename_component(deps "../_deps" REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
+set(FETCHCONTENT_BASE_DIR ${deps})
 
 if(WITH_JPEG)
   add_subdirectory(libjpeg-turbo)

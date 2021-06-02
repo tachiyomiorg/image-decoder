@@ -1,8 +1,8 @@
-include(FetchContent)
-
 FetchContent_Declare(libde265
   GIT_REPOSITORY  https://github.com/strukturag/libde265.git
   GIT_TAG         v1.0.8
+  BINARY_DIR      libde265-build
+  SUBBUILD_DIR    libde265-subbuild
 )
 
 option(BUILD_SHARED_LIBS "" OFF)
