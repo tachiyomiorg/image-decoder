@@ -5,6 +5,8 @@
 #ifndef IMAGEDECODER_DECODER_HEADERS_H
 #define IMAGEDECODER_DECODER_HEADERS_H
 
+#include <algorithm>
+
 bool is_jpeg(uint8_t* data) {
   return data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
 }
@@ -21,32 +23,31 @@ bool is_gif(const uint8_t* data) {
   return data[0] == 'G' && data[1] == 'I' && data[2] == 'F' && data[3] == '8';
 }
 
-static const uint8_t heifMagic[] =
-  {'f', 't', 'y', 'p'};
-
-static const uint8_t heifBrands[][4] = {
-  {'h', 'e', 'i', 'c'},
-  {'h', 'e', 'i', 'x'},
-  {'h', 'e', 'v', 'c'},
-  {'h', 'e', 'i', 'm'},
-  {'h', 'e', 'i', 's'},
-  {'h', 'e', 'v', 'm'},
-  {'h', 'e', 'v', 's'},
-  {'m', 'i', 'f', '1'},
-  {'m', 's', 'f', '1'}
+enum ftyp_image_type {
+    ftyp_image_type_no,
+    ftyp_image_type_heif,
+    ftyp_image_type_avif
 };
 
-bool is_heif(const uint8_t* data) {
-  if (memcmp(data + 4, heifMagic, 4) != 0) {
-    return false;
+ftyp_image_type get_ftyp_image_type(const uint8_t* data, uint32_t size) {
+  if (data[4] != 'f' || data[5] != 't' || data[6] != 'y' || data[7] != 'p') {
+    return ftyp_image_type_no;
   }
 
-  for (uint32_t i = 0; i < sizeof(heifBrands); i++) {
-    if (memcmp(data + 8, heifBrands[i], 4) == 0) {
-      return true;
+  uint32_t headerSize = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+  uint32_t maxOffset = std::min(headerSize, size) - 4;
+  uint32_t offset = 8;
+  while (offset <= maxOffset) {
+    auto brand = data + offset;
+    if (brand[0] == 'h' && brand[1] == 'e' && (brand[2] == 'i' || brand[2] == 'v')) {
+      return ftyp_image_type_heif;
+    } else if (brand[0] == 'a' && brand[1] == 'v' && brand[2] == 'i') {
+      return ftyp_image_type_avif;
     }
+    offset += 4;
   }
-  return false;
+
+  return ftyp_image_type_no;
 }
 
 #endif //IMAGEDECODER_DECODER_HEADERS_H

@@ -6,6 +6,10 @@
 #include <libheif/heif_cxx.h>
 #include "row_convert.h"
 
+bool is_libheif_compatible(const uint8_t* bytes, uint32_t size) {
+  return heif_check_filetype(bytes, size) != heif_filetype_no;
+}
+
 auto init_heif_context(Stream* stream) {
   auto ctx = heif::Context();
   ctx.read_from_memory_without_copy(stream->bytes, stream->size);

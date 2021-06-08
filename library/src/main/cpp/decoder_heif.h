@@ -7,6 +7,8 @@
 
 #include "decoder_base.h"
 
+bool is_libheif_compatible(const uint8_t* bytes, uint32_t size);
+
 class HeifDecoder: public BaseDecoder {
 public:
     HeifDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);

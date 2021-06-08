@@ -50,7 +50,7 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(
     }
 #endif
 #ifdef HAVE_LIBHEIF
-    else if (is_heif(stream->bytes)) {
+    else if (is_libheif_compatible(stream->bytes, stream->size)) {
       decoder = new HeifDecoder(std::move(stream), cropBorders);
     }
 #endif
@@ -131,42 +131,44 @@ JNIEXPORT jobject JNICALL
 Java_tachiyomi_decoder_ImageDecoder_nativeFindType(
   JNIEnv* env, jclass, jbyteArray array
 ) {
+  uint32_t toRead = 32;
   uint32_t size = env->GetArrayLength(array);
 
-  if (size < 4) {
+  if (size < toRead) {
     LOGW("Not enough bytes to parse info");
     return nullptr;
   }
 
-  auto bytes = (uint8_t*) env->GetByteArrayElements(array, nullptr);
+  auto _bytes = std::make_unique<uint8_t[]>(toRead);
+  auto bytes = _bytes.get();
+  env->GetByteArrayRegion(array, 0, toRead, (jbyte*) bytes);
 
-  jobject imageType = nullptr;
   if (is_jpeg(bytes)) {
-    imageType = create_image_type(env, 0, false);
+    return create_image_type(env, 0, false);
   } else if (is_png(bytes)) {
-    imageType = create_image_type(env, 1, false);
+    return create_image_type(env, 1, false);
   } else if (is_webp(bytes)) {
     try {
 #ifdef HAVE_LIBWEBP
-      auto stream = std::make_unique<Stream>(bytes, size);
-      auto decoder = std::make_unique<WebpDecoder>(std::move(stream), false);
-      imageType = create_image_type(env, 2, decoder->info.isAnimated);
+      auto decoder = std::make_unique<WebpDecoder>(std::make_shared<Stream>(bytes, size), false);
+      return create_image_type(env, 2, decoder->info.isAnimated);
 #else
       throw std::runtime_error("WebP decoder not available");
 #endif
     } catch (std::exception &ex) {
       LOGW("Failed to parse WebP header. Falling back to non animated WebP");
-      imageType = create_image_type(env, 2, false);
+      return create_image_type(env, 2, false);
     }
   } else if (is_gif(bytes)) {
-    imageType = create_image_type(env, 3, true);
-  } else if (is_heif(bytes)) {
-    imageType = create_image_type(env, 4, false);
-  } else {
-    LOGW("Failed to find image type");
+    return create_image_type(env, 3, true);
   }
 
-  env->ReleaseByteArrayElements(array, (jbyte*) bytes, 0);
+  switch (get_ftyp_image_type(bytes, toRead)) {
+    case ftyp_image_type_heif: return create_image_type(env, 4, false);
+    case ftyp_image_type_avif: return create_image_type(env, 5, false);
+    case ftyp_image_type_no: break;
+  }
 
-  return imageType;
+  LOGW("Failed to find image type");
+  return nullptr;
 }
