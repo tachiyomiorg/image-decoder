@@ -54,6 +54,11 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(
       decoder = new HeifDecoder(std::move(stream), cropBorders);
     }
 #endif
+#ifdef HAVE_LIBJXL
+    else if (is_jxl(stream->bytes)) {
+      decoder = new JpegxlDecoder(std::move(stream), cropBorders);
+    }
+#endif
     else {
       LOGE("No decoder found to handle this stream");
       return nullptr;
@@ -161,6 +166,8 @@ Java_tachiyomi_decoder_ImageDecoder_nativeFindType(
     }
   } else if (is_gif(bytes)) {
     return create_image_type(env, 3, true);
+  } else if (is_jxl(bytes)) {
+    return create_image_type(env, 6, false);
   }
 
   switch (get_ftyp_image_type(bytes, toRead)) {

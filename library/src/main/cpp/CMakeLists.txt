@@ -9,6 +9,7 @@ option(WITH_PNG "Include PNG decoder" ON)
 option(WITH_WEBP "Include WebP decoder" ON)
 option(WITH_HEIF "Include HEIF decoder" ON)
 option(WITH_AVIF "Include AVIF decoder" ON)
+option(WITH_JXL "Include JXL decoder" ON)
 
 add_library(imagedecoder SHARED
   java_stream.cpp
@@ -42,5 +43,11 @@ if(WITH_HEIF OR WITH_AVIF)
   add_definitions(-DHAVE_LIBHEIF)
   target_sources(imagedecoder PRIVATE decoder_heif.cpp)
 endif()
+if(WITH_JXL)
+  add_subdirectory(libjxl)
+  add_definitions(-DHAVE_LIBJXL)
+  target_sources(imagedecoder PRIVATE decoder_jxl.cpp)
+endif()
+
 
 target_link_libraries(imagedecoder android jnigraphics log)
