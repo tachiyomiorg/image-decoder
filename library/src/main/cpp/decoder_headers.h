@@ -50,15 +50,12 @@ ftyp_image_type get_ftyp_image_type(const uint8_t* data, uint32_t size) {
   return ftyp_image_type_no;
 }
 
-static uint8_t JXL_HEADER[] = "\0\0\0\x0cJXL \x0d\x0a......ftypjxl ";
-
 bool is_jxl(const uint8_t* data) {
-  for (uint32_t i = 0; i < 25; i++) {
-    if (data[i] != JXL_HEADER[i]) return false;
-    if (i == 9) i += 6;
-  }
-
-  return true;
+  return (data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 0xC &&
+          data[4] == 'J' && data[5] == 'X' && data[6] == 'L' &&
+          data[7] == ' ' && data[8] == 0xD && data[9] == 0xA &&
+          data[10] == 0x87 && data[11] == 0xA) || // container
+         (data[0] == 0xff && data[1] == 0x0a);    // codestream
 }
 
 #endif //IMAGEDECODER_DECODER_HEADERS_H
