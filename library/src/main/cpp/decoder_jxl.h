@@ -13,9 +13,9 @@
 
 class JpegxlDecoder : public BaseDecoder {
 public:
-  JpegxlDecoder(std::shared_ptr<Stream> &&stream, bool cropBorders);
+  JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
-  void decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb565,
+  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
               uint32_t sampleSize);
 
 private:

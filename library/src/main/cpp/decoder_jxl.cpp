@@ -6,13 +6,13 @@
 #include "row_convert.h"
 #include <vector>
 
-JpegxlDecoder::JpegxlDecoder(std::shared_ptr<Stream> &&stream, bool cropBorders)
+JpegxlDecoder::JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
     : BaseDecoder(std::move(stream), cropBorders) {
   this->info = parseInfo();
 }
 
-void decodeRGB(const uint8_t *data, size_t size, int channels,
-               std::vector<uint8_t> *pixels, JxlBasicInfo *jxl_info) {
+void decodeRGB(const uint8_t* data, size_t size, int channels,
+               std::vector<uint8_t>* pixels, JxlBasicInfo* jxl_info) {
   auto runner = JxlThreadParallelRunnerMake(
       nullptr, JxlThreadParallelRunnerDefaultNumWorkerThreads());
 
@@ -60,7 +60,7 @@ void decodeRGB(const uint8_t *data, size_t size, int channels,
       }
 
       pixels->resize(buffer_size);
-      void *pixels_buffer = (void *)pixels->data();
+      void* pixels_buffer = (void*)pixels->data();
       if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(dec.get(), &format,
                                                          pixels_buffer,
                                                          buffer_size)) {
@@ -85,7 +85,7 @@ ImageInfo JpegxlDecoder::parseInfo() {
     decodeRGB(stream->bytes, stream->size, 0, &pixels, &jxl_info);
 
     uint32_t num_pixels = jxl_info.xsize * jxl_info.ysize;
-    uint8_t *pixels_buffer = (uint8_t *)pixels.data();
+    uint8_t* pixels_buffer = (uint8_t*)pixels.data();
     uint32_t num_channels =
         (jxl_info.alpha_bits > 0 ? 1 : 0) + jxl_info.num_color_channels;
 
@@ -143,11 +143,11 @@ ImageInfo JpegxlDecoder::parseInfo() {
 
   return ImageInfo{.imageWidth = jxl_info.xsize,
                    .imageHeight = jxl_info.ysize,
-                   .isAnimated = (bool)jxl_info.have_animation,
+                   .isAnimated = false, // (bool)jxl_info.have_animation,
                    .bounds = bounds};
 }
 
-void JpegxlDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect,
+void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                            bool rgb565, uint32_t sampleSize) {
 
   std::vector<uint8_t> pixels;
@@ -158,11 +158,11 @@ void JpegxlDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect,
   int stride = 4 * info.imageWidth;
   uint32_t inStride = stride;
   uint32_t inStrideOffset = inRect.x * (stride / info.imageWidth);
-  auto inPixelsPos = (uint8_t *)pixels.data() + inStride * inRect.y;
+  auto inPixelsPos = (uint8_t*)pixels.data() + inStride * inRect.y;
 
   // Calculate output stride
   uint32_t outStride = outRect.width * (rgb565 ? 2 : 4);
-  uint8_t *outPixelsPos = outPixels;
+  uint8_t* outPixelsPos = outPixels;
 
   // Set row conversion function
   auto rowFn = rgb565 ? &RGBA8888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
