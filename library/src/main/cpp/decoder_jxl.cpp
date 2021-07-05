@@ -11,10 +11,9 @@ JpegxlDecoder::JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
   this->info = parseInfo();
 }
 
-void decodeRGB(const uint8_t* data, size_t size, int channels,
-               std::vector<uint8_t>* pixels, JxlBasicInfo* jxl_info) {
-  auto runner = JxlThreadParallelRunnerMake(
-      nullptr, JxlThreadParallelRunnerDefaultNumWorkerThreads());
+std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
+                               JxlBasicInfo* info, uint32_t channels = 0) {
+  auto runner = JxlResizableParallelRunnerMake(nullptr);
 
   auto dec = JxlDecoderMake(nullptr);
   if (JXL_DEC_SUCCESS !=
@@ -24,13 +23,14 @@ void decodeRGB(const uint8_t* data, size_t size, int channels,
   }
 
   if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(dec.get(),
-                                                     JxlThreadParallelRunner,
+                                                     JxlResizableParallelRunner,
                                                      runner.get())) {
     throw std::runtime_error("JxlDecoderSetParallelRunner failed");
   }
 
   JxlDecoderSetInput(dec.get(), data, size);
 
+  std::vector<uint8_t> pixels;
   for (;;) {
     JxlDecoderStatus status = JxlDecoderProcessInput(dec.get());
 
@@ -39,19 +39,17 @@ void decodeRGB(const uint8_t* data, size_t size, int channels,
     } else if (status == JXL_DEC_NEED_MORE_INPUT) {
       throw std::runtime_error("Error, already provided all input");
     } else if (status == JXL_DEC_BASIC_INFO) {
-      if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(dec.get(), jxl_info)) {
+      if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(dec.get(), info)) {
         throw std::runtime_error("JxlDecoderGetBasicInfo failed");
       }
+      JxlResizableParallelRunnerSetThreads(
+          runner.get(),
+          JxlResizableParallelRunnerSuggestThreads(info->xsize, info->ysize));
     } else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
-      uint32_t num_channels;
       if (channels == 0) {
-        num_channels =
-            (jxl_info->alpha_bits > 0 ? 1 : 0) + jxl_info->num_color_channels;
-      } else {
-        num_channels = channels;
+        channels = (info->alpha_bits > 0 ? 1 : 0) + info->num_color_channels;
       }
-      JxlPixelFormat format = {num_channels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN,
-                               0};
+      JxlPixelFormat format = {channels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0};
 
       size_t buffer_size;
       if (JXL_DEC_SUCCESS !=
@@ -59,14 +57,14 @@ void decodeRGB(const uint8_t* data, size_t size, int channels,
         throw std::runtime_error("JxlDecoderImageOutBufferSize failed");
       }
 
-      pixels->resize(buffer_size);
-      void* pixels_buffer = (void*)pixels->data();
+      pixels.resize(buffer_size);
       if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(dec.get(), &format,
-                                                         pixels_buffer,
-                                                         buffer_size)) {
+                                                         pixels.data(),
+                                                         pixels.size())) {
         throw std::runtime_error("JxlDecoderSetImageOutBuffer failed");
       }
     } else if (status == JXL_DEC_FULL_IMAGE) {
+      break;
     } else if (status == JXL_DEC_SUCCESS) {
       break;
     } else {
@@ -74,6 +72,8 @@ void decodeRGB(const uint8_t* data, size_t size, int channels,
       break;
     }
   }
+
+  return pixels;
 }
 
 ImageInfo JpegxlDecoder::parseInfo() {
@@ -81,20 +81,20 @@ ImageInfo JpegxlDecoder::parseInfo() {
   JxlBasicInfo jxl_info;
 
   if (cropBorders) {
-    std::vector<uint8_t> pixels;
-    decodeRGB(stream->bytes, stream->size, 0, &pixels, &jxl_info);
+    std::vector<uint8_t> pixels =
+        decodeRGB(stream->bytes, stream->size, &jxl_info);
 
-    uint32_t num_pixels = jxl_info.xsize * jxl_info.ysize;
     uint8_t* pixels_buffer = (uint8_t*)pixels.data();
     uint32_t num_channels =
         (jxl_info.alpha_bits > 0 ? 1 : 0) + jxl_info.num_color_channels;
 
+    // Re-align gray image to the front of the vector
     if (num_channels == 2) {
-      for (int x = 0; x < num_pixels * num_channels; x += num_channels) {
+      for (int x = 0; x < pixels.size(); x += num_channels) {
         pixels_buffer[x / num_channels] = pixels_buffer[x];
       }
     } else if (num_channels == 3 || num_channels == 4) {
-      for (int x = 0; x < num_pixels * num_channels; x += num_channels) {
+      for (int x = 0; x < pixels.size(); x += num_channels) {
         uint8_t r = pixels_buffer[x + 0];
         uint8_t g = pixels_buffer[x + 1];
         uint8_t b = pixels_buffer[x + 2];
@@ -149,10 +149,9 @@ ImageInfo JpegxlDecoder::parseInfo() {
 
 void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                            bool rgb565, uint32_t sampleSize) {
-
-  std::vector<uint8_t> pixels;
   JxlBasicInfo jxl_info;
-  decodeRGB(stream->bytes, stream->size, 4, &pixels, &jxl_info);
+  std::vector<uint8_t> pixels =
+      decodeRGB(stream->bytes, stream->size, &jxl_info, 4);
 
   // Copied from decoder_heif.cpp
   int stride = 4 * info.imageWidth;

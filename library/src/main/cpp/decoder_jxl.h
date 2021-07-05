@@ -8,8 +8,8 @@
 #include "decoder_base.h"
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
-#include <jxl/thread_parallel_runner.h>
-#include <jxl/thread_parallel_runner_cxx.h>
+#include <jxl/resizable_parallel_runner.h>
+#include <jxl/resizable_parallel_runner_cxx.h>
 
 class JpegxlDecoder : public BaseDecoder {
 public:
