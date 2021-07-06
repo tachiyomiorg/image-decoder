@@ -18,5 +18,8 @@
 #ifdef HAVE_LIBHEIF
 #include "decoder_heif.h"
 #endif
+#ifdef HAVE_LIBJXL
+#include "decoder_jxl.h"
+#endif
 
 #endif //IMAGEDECODER_DECODERS_H

@@ -50,4 +50,12 @@ ftyp_image_type get_ftyp_image_type(const uint8_t* data, uint32_t size) {
   return ftyp_image_type_no;
 }
 
+bool is_jxl(const uint8_t* data) {
+  return (data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 0xC &&
+          data[4] == 'J' && data[5] == 'X' && data[6] == 'L' &&
+          data[7] == ' ' && data[8] == 0xD && data[9] == 0xA &&
+          data[10] == 0x87 && data[11] == 0xA) || // container
+         (data[0] == 0xff && data[1] == 0x0a);    // codestream
+}
+
 #endif //IMAGEDECODER_DECODER_HEADERS_H
