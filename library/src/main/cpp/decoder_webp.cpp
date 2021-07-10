@@ -36,11 +36,31 @@ ImageInfo WebpDecoder::parseInfo() {
     }
   }
 
+  std::vector<uint8_t> icc_profile;
+
+  WebPData data = {.bytes = stream->bytes, .size = stream->size};
+  WebPDemuxer* const demux = WebPDemux(&data);
+
+  if (demux != NULL) {
+    uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
+    WebPChunkIterator chunk_iter;
+
+    if ((flags & ICCP_FLAG) &&
+        WebPDemuxGetChunk(demux, "ICCP", 1, &chunk_iter)) {
+      icc_profile.resize(chunk_iter.chunk.size);
+      memcpy(icc_profile.data(), chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+      WebPDemuxReleaseChunkIterator(&chunk_iter);
+    }
+
+    WebPDemuxDelete(demux);
+  }
+
   return ImageInfo{
       .imageWidth = imageWidth,
       .imageHeight = imageHeight,
       .isAnimated = isAnimated,
       .bounds = bounds,
+      .icc_profile = icc_profile,
   };
 }
 

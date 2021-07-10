@@ -4,6 +4,7 @@
 
 #include "decoder_heif.h"
 #include "row_convert.h"
+#include <libheif/heif.h>
 #include <libheif/heif_cxx.h>
 
 bool is_libheif_compatible(const uint8_t* bytes, uint32_t size) {
@@ -43,11 +44,20 @@ ImageInfo HeifDecoder::parseInfo() {
     }
   }
 
+  auto im_handle = handle.get_raw_image_handle();
+  std::vector<uint8_t> icc_profile;
+  size_t icc_size = heif_image_handle_get_raw_color_profile_size(im_handle);
+  if (icc_size > 0) {
+    icc_profile.resize(icc_size);
+    heif_image_handle_get_raw_color_profile(im_handle, icc_profile.data());
+  }
+
   return ImageInfo{
       .imageWidth = imageWidth,
       .imageHeight = imageHeight,
       .isAnimated = false,
       .bounds = bounds,
+      .icc_profile = icc_profile,
   };
 }
 

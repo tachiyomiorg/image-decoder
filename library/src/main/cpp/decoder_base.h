@@ -7,12 +7,14 @@
 
 #include "borders.h"
 #include "java_stream.h"
+#include <vector>
 
 struct ImageInfo {
   uint32_t imageWidth;
   uint32_t imageHeight;
   bool isAnimated;
   Rect bounds;
+  std::vector<uint8_t> icc_profile;
 };
 
 class BaseDecoder {

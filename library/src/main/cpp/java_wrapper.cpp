@@ -9,6 +9,10 @@
 #include <android/bitmap.h>
 #include <jni.h>
 
+#ifdef HAVE_LCMS
+#include <include/lcms2.h>
+#endif
+
 jint JNI_OnLoad(JavaVM* vm, void*) {
   JNIEnv* env;
   if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_OK) {
@@ -114,6 +118,28 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     AndroidBitmap_unlockPixels(env, bitmap);
     return nullptr;
   }
+
+#ifdef HAVE_LCMS
+  if (!rgb565 && !decoder->info.icc_profile.empty()) {
+    try {
+      auto src_profile = cmsOpenProfileFromMem(
+          decoder->info.icc_profile.data(), decoder->info.icc_profile.size());
+      auto target_profile = cmsCreate_sRGBProfile();
+
+      auto transform =
+          cmsCreateTransform(src_profile, TYPE_RGBA_8, target_profile,
+                             TYPE_RGBA_8, INTENT_PERCEPTUAL, 0);
+
+      cmsDoTransform(transform, pixels, pixels, outRect.width * outRect.height);
+
+      cmsCloseProfile(src_profile);
+      cmsCloseProfile(target_profile);
+      cmsDeleteTransform(transform);
+    } catch (std::exception& ex) {
+      LOGE("%s", ex.what());
+    }
+  }
+#endif
 
   AndroidBitmap_unlockPixels(env, bitmap);
   return bitmap;

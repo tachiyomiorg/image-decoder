@@ -10,6 +10,7 @@ option(WITH_WEBP "Include WebP decoder" ON)
 option(WITH_HEIF "Include HEIF decoder" ON)
 option(WITH_AVIF "Include AVIF decoder" ON)
 option(WITH_JXL "Include JXL decoder" ON)
+option(WITH_LCMS "Compile with lcms" ON)
 
 add_library(imagedecoder SHARED
   java_stream.cpp
@@ -22,6 +23,11 @@ add_library(imagedecoder SHARED
 # Change the default path of fetch content to avoid downloading the same dependencies per architecture
 get_filename_component(deps "../_deps" REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 set(FETCHCONTENT_BASE_DIR ${deps})
+
+if(WITH_LCMS)
+  add_subdirectory(lcms)
+  add_definitions(-DHAVE_LCMS)
+endif()
 
 if(WITH_JPEG)
   add_subdirectory(libjpeg-turbo)

@@ -24,6 +24,7 @@ JpegDecodeSession::JpegDecodeSession()
 void JpegDecodeSession::init(Stream* stream) {
   jpeg_create_decompress(&jinfo);
   jpeg_mem_src(&jinfo, stream->bytes, stream->size);
+  jpeg_save_markers(&jinfo, JPEG_APP0 + 2, 0xFFFF);
   jpeg_read_header(&jinfo, true);
 }
 
@@ -41,6 +42,16 @@ ImageInfo JpegDecoder::parseInfo() {
 
   uint32_t imageWidth = jinfo.image_width;
   uint32_t imageHeight = jinfo.image_height;
+
+  std::vector<uint8_t> icc_profile;
+  JOCTET* icc_data;
+  unsigned int icc_size;
+  if (jinfo.jpeg_color_space != JCS_GRAYSCALE &&
+      jpeg_read_icc_profile(&jinfo, &icc_data, &icc_size)) {
+    icc_profile.resize(icc_size);
+    memcpy(icc_profile.data(), icc_data, icc_size);
+    free(icc_data);
+  }
 
   Rect bounds = {.x = 0, .y = 0, .width = imageWidth, .height = imageHeight};
   if (cropBorders) {
@@ -68,6 +79,7 @@ ImageInfo JpegDecoder::parseInfo() {
       .imageHeight = jinfo.image_height,
       .isAnimated = false,
       .bounds = bounds,
+      .icc_profile = icc_profile,
   };
 }
 

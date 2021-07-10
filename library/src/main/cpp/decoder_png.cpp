@@ -105,11 +105,27 @@ ImageInfo PngDecoder::parseInfo() {
     }
   }
 
+  std::vector<uint8_t> icc_profile;
+  auto color_type = png_get_color_type(png, pinfo);
+
+  if ((color_type == PNG_COLOR_TYPE_RGB ||
+       color_type == PNG_COLOR_TYPE_RGB_ALPHA) &&
+      png_get_valid(png, pinfo, PNG_INFO_iCCP)) {
+    png_charp name;
+    png_bytep icc_data;
+    png_uint_32 icc_size;
+    int comp_type;
+    png_get_iCCP(png, pinfo, &name, &comp_type, &icc_data, &icc_size);
+    icc_profile.resize(icc_size);
+    memcpy(icc_profile.data(), icc_data, icc_size);
+  }
+
   return ImageInfo{
       .imageWidth = imageWidth,
       .imageHeight = imageHeight,
       .isAnimated = false,
       .bounds = bounds,
+      .icc_profile = icc_profile,
   };
 }
 

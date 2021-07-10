@@ -12,13 +12,18 @@ JpegxlDecoder::JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
 }
 
 std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
-                               JxlBasicInfo* info, uint32_t channels = 0) {
+                               JxlBasicInfo* info,
+                               std::vector<uint8_t>* icc_profile = nullptr,
+                               uint32_t channels = 0) {
   auto runner = JxlResizableParallelRunnerMake(nullptr);
 
+  auto events = JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE;
+  if (icc_profile != nullptr) {
+    events |= JXL_DEC_COLOR_ENCODING;
+  }
+
   auto dec = JxlDecoderMake(nullptr);
-  if (JXL_DEC_SUCCESS !=
-      JxlDecoderSubscribeEvents(dec.get(),
-                                JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE)) {
+  if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(dec.get(), events)) {
     throw std::runtime_error("JxlDecoderSubscribeEvents failed");
   }
 
@@ -32,6 +37,7 @@ std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
   JxlDecoderCloseInput(dec.get());
 
   std::vector<uint8_t> pixels;
+  JxlPixelFormat format;
   for (;;) {
     JxlDecoderStatus status = JxlDecoderProcessInput(dec.get());
 
@@ -50,7 +56,7 @@ std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
       if (channels == 0) {
         channels = (info->alpha_bits > 0 ? 1 : 0) + info->num_color_channels;
       }
-      JxlPixelFormat format = {channels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0};
+      format = {channels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0};
 
       size_t buffer_size;
       if (JXL_DEC_SUCCESS !=
@@ -63,6 +69,23 @@ std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
                                                          pixels.data(),
                                                          pixels.size())) {
         throw std::runtime_error("JxlDecoderSetImageOutBuffer failed");
+      }
+    } else if (status == JXL_DEC_COLOR_ENCODING) {
+      if (info->num_color_channels == 1) {
+        continue;
+      }
+      size_t icc_size;
+      if (JXL_DEC_SUCCESS !=
+          JxlDecoderGetICCProfileSize(
+              dec.get(), &format, JXL_COLOR_PROFILE_TARGET_DATA, &icc_size)) {
+        throw std::runtime_error("JxlDecoderGetICCProfileSize failed");
+      }
+      icc_profile->resize(icc_size);
+      if (JXL_DEC_SUCCESS != JxlDecoderGetColorAsICCProfile(
+                                 dec.get(), &format,
+                                 JXL_COLOR_PROFILE_TARGET_DATA,
+                                 icc_profile->data(), icc_profile->size())) {
+        throw std::runtime_error("JxlDecoderGetColorAsICCProfile failed");
       }
     } else if (status == JXL_DEC_FULL_IMAGE) {
       break;
@@ -80,10 +103,11 @@ std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
 ImageInfo JpegxlDecoder::parseInfo() {
   Rect bounds;
   JxlBasicInfo jxl_info;
+  std::vector<uint8_t> icc_profile;
 
   if (cropBorders) {
     std::vector<uint8_t> pixels =
-        decodeRGB(stream->bytes, stream->size, &jxl_info);
+        decodeRGB(stream->bytes, stream->size, &jxl_info, &icc_profile);
 
     uint8_t* pixels_buffer = (uint8_t*)pixels.data();
     uint32_t num_channels =
@@ -112,7 +136,8 @@ ImageInfo JpegxlDecoder::parseInfo() {
     auto dec = JxlDecoderMake(NULL);
 
     if (JXL_DEC_SUCCESS !=
-        JxlDecoderSubscribeEvents(dec.get(), JXL_DEC_BASIC_INFO)) {
+        JxlDecoderSubscribeEvents(dec.get(), JXL_DEC_BASIC_INFO |
+                                                 JXL_DEC_COLOR_ENCODING)) {
       throw std::runtime_error("JxlDecoderSubscribeEvents failed");
     }
 
@@ -130,6 +155,24 @@ ImageInfo JpegxlDecoder::parseInfo() {
           throw std::runtime_error("JxlDecoderGetBasicInfo failed");
         }
         break;
+      } else if (status == JXL_DEC_COLOR_ENCODING) {
+        if (jxl_info.num_color_channels == 1) {
+          continue;
+        }
+        JxlPixelFormat format = {4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0};
+        size_t icc_size;
+        if (JXL_DEC_SUCCESS !=
+            JxlDecoderGetICCProfileSize(
+                dec.get(), &format, JXL_COLOR_PROFILE_TARGET_DATA, &icc_size)) {
+          throw std::runtime_error("JxlDecoderGetICCProfileSize failed");
+        }
+        icc_profile.resize(icc_size);
+        if (JXL_DEC_SUCCESS != JxlDecoderGetColorAsICCProfile(
+                                   dec.get(), &format,
+                                   JXL_COLOR_PROFILE_TARGET_DATA,
+                                   icc_profile.data(), icc_profile.size())) {
+          throw std::runtime_error("JxlDecoderGetColorAsICCProfile failed");
+        }
       } else if (status == JXL_DEC_SUCCESS) {
         break;
       } else {
@@ -147,6 +190,7 @@ ImageInfo JpegxlDecoder::parseInfo() {
       .imageHeight = jxl_info.ysize,
       .isAnimated = false, // (bool)jxl_info.have_animation,
       .bounds = bounds,
+      .icc_profile = icc_profile,
   };
 }
 
@@ -154,7 +198,7 @@ void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                            bool rgb565, uint32_t sampleSize) {
   JxlBasicInfo jxl_info;
   std::vector<uint8_t> pixels =
-      decodeRGB(stream->bytes, stream->size, &jxl_info, 4);
+      decodeRGB(stream->bytes, stream->size, &jxl_info, nullptr, 4);
 
   // Copied from decoder_heif.cpp
   int stride = 4 * info.imageWidth;
