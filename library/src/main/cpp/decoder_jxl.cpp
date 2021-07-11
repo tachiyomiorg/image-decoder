@@ -71,9 +71,6 @@ std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
         throw std::runtime_error("JxlDecoderSetImageOutBuffer failed");
       }
     } else if (status == JXL_DEC_COLOR_ENCODING) {
-      if (info->num_color_channels == 1) {
-        continue;
-      }
       size_t icc_size;
       if (JXL_DEC_SUCCESS !=
           JxlDecoderGetICCProfileSize(

@@ -46,8 +46,7 @@ ImageInfo JpegDecoder::parseInfo() {
   std::vector<uint8_t> icc_profile;
   JOCTET* icc_data;
   unsigned int icc_size;
-  if (jinfo.jpeg_color_space != JCS_GRAYSCALE &&
-      jpeg_read_icc_profile(&jinfo, &icc_data, &icc_size)) {
+  if (jpeg_read_icc_profile(&jinfo, &icc_data, &icc_size)) {
     icc_profile.resize(icc_size);
     memcpy(icc_profile.data(), icc_data, icc_size);
     free(icc_data);

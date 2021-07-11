@@ -125,6 +125,26 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
   auto embedded_icc = decoder->info.icc_profile;
 
   if (apply_cms && (!embedded_icc.empty() || icm_stream != NULL)) {
+    cmsHPROFILE src_profile;
+    cmsHPROFILE target_profile;
+
+    if (embedded_icc.empty()) {
+      src_profile = cmsCreate_sRGBProfile();
+    } else {
+      try {
+        src_profile =
+            cmsOpenProfileFromMem(embedded_icc.data(), embedded_icc.size());
+
+        cmsColorSpaceSignature src_colorspace = cmsGetColorSpace(src_profile);
+        if (src_colorspace == cmsSigGrayData) {
+          cmsCloseProfile(src_profile);
+          src_profile = cmsCreate_sRGBProfile();
+        }
+      } catch (std::exception& ex) {
+        src_profile = cmsCreate_sRGBProfile();
+      }
+    }
+
     uint8_t* col_buf;
     std::vector<uint8_t> color;
     if (rgb565) {
@@ -142,20 +162,6 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
       col_buf = color.data();
     } else {
       col_buf = pixels;
-    }
-
-    cmsHPROFILE src_profile;
-    cmsHPROFILE target_profile;
-
-    if (embedded_icc.empty()) {
-      src_profile = cmsCreate_sRGBProfile();
-    } else {
-      try {
-        src_profile =
-            cmsOpenProfileFromMem(embedded_icc.data(), embedded_icc.size());
-      } catch (std::exception& ex) {
-        src_profile = cmsCreate_sRGBProfile();
-      }
     }
 
     if (icm_stream != NULL) {
@@ -179,9 +185,9 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     }
 
     try {
-      auto transform =
-          cmsCreateTransform(src_profile, TYPE_RGBA_8, target_profile,
-                             TYPE_RGBA_8, INTENT_PERCEPTUAL, 0);
+      auto transform = cmsCreateTransform(
+          src_profile, TYPE_RGBA_8, target_profile, TYPE_RGBA_8,
+          cmsGetHeaderRenderingIntent(target_profile), 0);
 
       cmsDoTransform(transform, col_buf, col_buf,
                      outRect.width * outRect.height);
