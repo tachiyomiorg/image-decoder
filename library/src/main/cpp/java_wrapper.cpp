@@ -8,6 +8,7 @@
 #include "java_stream.h"
 #include <android/bitmap.h>
 #include <jni.h>
+#include <vector>
 
 #ifdef HAVE_LCMS
 #include <include/lcms2.h>
@@ -79,7 +80,8 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(JNIEnv* env, jclass,
 extern "C" JNIEXPORT jobject JNICALL
 Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     JNIEnv* env, jobject, jlong decoderPtr, jboolean rgb565, jint sampleSize,
-    jint x, jint y, jint width, jint height) {
+    jint x, jint y, jint width, jint height, jboolean apply_cms,
+    jbyteArray icm_stream) {
   auto* decoder = (BaseDecoder*)decoderPtr;
 
   // Bounds of the image when crop borders is enabled, otherwise it matches the
@@ -120,23 +122,86 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
   }
 
 #ifdef HAVE_LCMS
-  if (!rgb565 && !decoder->info.icc_profile.empty()) {
-    try {
-      auto src_profile = cmsOpenProfileFromMem(
-          decoder->info.icc_profile.data(), decoder->info.icc_profile.size());
-      auto target_profile = cmsCreate_sRGBProfile();
+  auto embedded_icc = decoder->info.icc_profile;
 
+  if (apply_cms && (!embedded_icc.empty() || icm_stream != NULL)) {
+    uint8_t* col_buf;
+    std::vector<uint8_t> color;
+    if (rgb565) {
+      color.resize(outRect.width * outRect.height * 4);
+      uint16_t* pixels_buf = (uint16_t*)pixels;
+      for (int i = 0; i < outRect.width * outRect.height; i++) {
+        uint8_t r = (pixels_buf[i] & 0xF800) >> 8;
+        uint8_t g = (pixels_buf[i] & 0x07E0) >> 3;
+        uint8_t b = (pixels_buf[i] & 0x001F) << 3;
+        color[i * 4 + 0] = r;
+        color[i * 4 + 1] = g;
+        color[i * 4 + 2] = b;
+        color[i * 4 + 3] = 255;
+      }
+      col_buf = color.data();
+    } else {
+      col_buf = pixels;
+    }
+
+    cmsHPROFILE src_profile;
+    cmsHPROFILE target_profile;
+
+    if (embedded_icc.empty()) {
+      src_profile = cmsCreate_sRGBProfile();
+    } else {
+      try {
+        src_profile =
+            cmsOpenProfileFromMem(embedded_icc.data(), embedded_icc.size());
+      } catch (std::exception& ex) {
+        src_profile = cmsCreate_sRGBProfile();
+      }
+    }
+
+    if (icm_stream != NULL) {
+      int icm_stream_len = env->GetArrayLength(icm_stream);
+      try {
+        if (icm_stream_len > 0) {
+          std::vector<uint8_t> icm_buf(icm_stream_len);
+          env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
+                                  reinterpret_cast<jbyte*>(icm_buf.data()));
+
+          target_profile =
+              cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
+        } else {
+          target_profile = cmsCreate_sRGBProfile();
+        }
+      } catch (std::exception& ex) {
+        target_profile = cmsCreate_sRGBProfile();
+      }
+    } else {
+      target_profile = cmsCreate_sRGBProfile();
+    }
+
+    try {
       auto transform =
           cmsCreateTransform(src_profile, TYPE_RGBA_8, target_profile,
                              TYPE_RGBA_8, INTENT_PERCEPTUAL, 0);
 
-      cmsDoTransform(transform, pixels, pixels, outRect.width * outRect.height);
+      cmsDoTransform(transform, col_buf, col_buf,
+                     outRect.width * outRect.height);
 
-      cmsCloseProfile(src_profile);
-      cmsCloseProfile(target_profile);
       cmsDeleteTransform(transform);
     } catch (std::exception& ex) {
       LOGE("%s", ex.what());
+    }
+
+    cmsCloseProfile(src_profile);
+    cmsCloseProfile(target_profile);
+
+    if (rgb565) {
+      uint16_t* pixels_buf = (uint16_t*)pixels;
+      for (int i = 0; i < outRect.width * outRect.height; i++) {
+        uint16_t c = (((col_buf[i * 4 + 0]) << 8) & 0xF800) |
+                     (((col_buf[i * 4 + 1]) << 3) & 0x07E0) |
+                     (((col_buf[i * 4 + 2]) >> 3) & 0x001F);
+        pixels_buf[i] = c;
+      }
     }
   }
 #endif
