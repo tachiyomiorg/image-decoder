@@ -24,7 +24,9 @@ class ImageDecoder private constructor(
   fun decode(
     region: Rect = Rect(0, 0, width, height),
     rgb565: Boolean = true,
-    sampleSize: Int = 1
+    sampleSize: Int = 1,
+    applyCMS: Boolean = false,
+    displayProfile: ByteArray? = null,
   ): Bitmap? {
     checkValidInput(region, sampleSize)
     return try {
@@ -33,8 +35,8 @@ class ImageDecoder private constructor(
         require(!isRecycled) { "The decoder has been recycled" }
       }
       nativeDecode(
-        nativePtr, rgb565, sampleSize,
-        region.left, region.top, region.width(), region.height()
+        nativePtr, rgb565, sampleSize, region.left, region.top,
+        region.width(), region.height(), applyCMS, displayProfile
       )
     } finally {
       val currentDecoding = decoding.decrementAndGet()
@@ -89,7 +91,9 @@ class ImageDecoder private constructor(
     x: Int,
     y: Int,
     width: Int,
-    height: Int
+    height: Int,
+    applyCms: Boolean,
+    displayProfile: ByteArray?
   ): Bitmap?
 
   private external fun nativeRecycle(nativePtr: Long)
