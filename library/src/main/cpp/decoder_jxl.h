@@ -16,10 +16,16 @@ public:
   JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
   void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
-              uint32_t sampleSize);
+              uint32_t sampleSize, cmsHPROFILE target_profile);
 
 private:
+  void decode();
+
   ImageInfo parseInfo();
+  std::vector<uint8_t> pixels;
+  JxlBasicInfo jxl_info;
+  cmsHPROFILE mSrcProfile;
+  bool transformed = false;
 };
 
 #endif // IMAGEDECODER_DECODER_JXL_H

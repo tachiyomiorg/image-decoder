@@ -36,38 +36,70 @@ ImageInfo WebpDecoder::parseInfo() {
     }
   }
 
-  std::vector<uint8_t> icc_profile;
+  return ImageInfo{
+      .imageWidth = imageWidth,
+      .imageHeight = imageHeight,
+      .isAnimated = isAnimated,
+      .bounds = bounds,
+  };
+}
 
+cmsHPROFILE WebpDecoder::getColorProfile() {
   WebPData data = {.bytes = stream->bytes, .size = stream->size};
   WebPDemuxer* const demux = WebPDemux(&data);
 
   if (demux != NULL) {
     uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
     WebPChunkIterator chunk_iter;
-
+    cmsHPROFILE src_profile;
     if ((flags & ICCP_FLAG) &&
         WebPDemuxGetChunk(demux, "ICCP", 1, &chunk_iter)) {
-      icc_profile.resize(chunk_iter.chunk.size);
-      memcpy(icc_profile.data(), chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+
+      src_profile =
+          cmsOpenProfileFromMem(chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+
       WebPDemuxReleaseChunkIterator(&chunk_iter);
     }
 
     WebPDemuxDelete(demux);
-  }
 
-  return ImageInfo{
-      .imageWidth = imageWidth,
-      .imageHeight = imageHeight,
-      .isAnimated = isAnimated,
-      .bounds = bounds,
-      .icc_profile = icc_profile,
-  };
+    if (!src_profile) {
+      return cmsCreate_sRGBProfile();
+    }
+
+    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+
+    // WebP doesn't support gray-scale.
+    if (profileSpace != cmsSigRgbData) {
+      cmsCloseProfile(src_profile);
+      return nullptr;
+    }
+
+    return src_profile;
+  } else {
+    return cmsCreate_sRGBProfile();
+  }
 }
 
 void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         bool rgb565, uint32_t sampleSize) {
+                         bool rgb565, uint32_t sampleSize,
+                         cmsHPROFILE target_profile) {
   WebPDecoderConfig config;
   WebPInitDecoderConfig(&config);
+
+  if (target_profile) {
+    cmsHPROFILE src_profile = getColorProfile();
+    if (src_profile) {
+      cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+      useTransform = true;
+
+      transform = cmsCreateTransform(
+          src_profile, TYPE_RGBA_8, target_profile, TYPE_RGBA_8,
+          cmsGetHeaderRenderingIntent(src_profile), 0);
+
+      cmsCloseProfile(src_profile);
+    }
+  }
 
   // Set decode region
   config.options.use_cropping =
@@ -83,8 +115,8 @@ void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   config.options.scaled_height = outRect.height;
 
   // Set colorspace and stride params
-  uint32_t outStride = outRect.width * (rgb565 ? 2 : 4);
-  config.output.colorspace = rgb565 ? MODE_RGB_565 : MODE_RGBA;
+  uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
+  config.output.colorspace = (!transform && rgb565) ? MODE_RGB_565 : MODE_RGBA;
   config.output.u.RGBA.rgba = outPixels;
   config.output.u.RGBA.size = outStride * outRect.height;
   config.output.u.RGBA.stride = outStride;

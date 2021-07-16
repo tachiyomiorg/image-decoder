@@ -8,7 +8,5 @@ FetchContent_Declare(lcms2
 
 FetchContent_MakeAvailable(lcms2)
 
-message(STATUS "BLAH ${lcms2_BINARY_DIR} ${lcms2_SOURCE_DIR}")
-
 target_include_directories(imagedecoder PRIVATE ${lcms2_BINARY_DIR} ${lcms2_SOURCE_DIR})
 target_link_libraries(imagedecoder lcms2)

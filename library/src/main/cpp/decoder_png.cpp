@@ -105,32 +105,41 @@ ImageInfo PngDecoder::parseInfo() {
     }
   }
 
-  std::vector<uint8_t> icc_profile;
-  auto color_type = png_get_color_type(png, pinfo);
-
-  if ((color_type == PNG_COLOR_TYPE_RGB ||
-       color_type == PNG_COLOR_TYPE_RGB_ALPHA) &&
-      png_get_valid(png, pinfo, PNG_INFO_iCCP)) {
-    png_charp name;
-    png_bytep icc_data;
-    png_uint_32 icc_size;
-    int comp_type;
-    png_get_iCCP(png, pinfo, &name, &comp_type, &icc_data, &icc_size);
-    icc_profile.resize(icc_size);
-    memcpy(icc_profile.data(), icc_data, icc_size);
-  }
-
   return ImageInfo{
       .imageWidth = imageWidth,
       .imageHeight = imageHeight,
       .isAnimated = false,
       .bounds = bounds,
-      .icc_profile = icc_profile,
   };
 }
 
+cmsHPROFILE PngDecoder::getColorProfile(png_struct* png, png_info* pinfo,
+                                        uint8_t colorType) {
+  if (png_get_valid(png, pinfo, PNG_INFO_iCCP)) {
+    png_charp name;
+    png_bytep icc_data;
+    png_uint_32 icc_size;
+    int comp_type;
+    png_get_iCCP(png, pinfo, &name, &comp_type, &icc_data, &icc_size);
+
+    cmsHPROFILE src_profile = cmsOpenProfileFromMem(icc_data, icc_size);
+    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+
+    if (profileSpace != cmsSigRgbData &&
+        (colorType & PNG_COLOR_MASK_COLOR || profileSpace != cmsSigGrayData)) {
+      cmsCloseProfile(src_profile);
+      return nullptr;
+    }
+
+    return src_profile;
+  } else {
+    return cmsCreate_sRGBProfile();
+  }
+}
+
 void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                        bool rgb565, uint32_t sampleSize) {
+                        bool rgb565, uint32_t sampleSize,
+                        cmsHPROFILE target_profile) {
   auto session = initDecodeSession();
   auto png = session->png;
   auto pinfo = session->pinfo;
@@ -138,45 +147,98 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   uint8_t colorType = png_get_color_type(png, pinfo);
   uint8_t bitDepth = png_get_bit_depth(png, pinfo);
 
-  png_set_expand(png);
   if (bitDepth == 16) {
     png_set_scale_16(png);
   }
-  if (colorType == PNG_COLOR_TYPE_GRAY ||
-      colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
-    png_set_gray_to_rgb(png);
+
+  if (target_profile) {
+    cmsHPROFILE src_profile = getColorProfile(png, pinfo, colorType);
+    if (src_profile) {
+      uint32_t profileSpace = cmsGetColorSpace(src_profile);
+      useTransform = profileSpace == cmsSigRgbData;
+
+      cmsUInt32Number inType;
+      if (useTransform) {
+        png_set_expand(png);
+        if (colorType == PNG_COLOR_TYPE_GRAY ||
+            colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
+          png_set_gray_to_rgb(png);
+        }
+        if (!(colorType & PNG_COLOR_MASK_ALPHA)) {
+          png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
+        }
+        inType = TYPE_RGBA_8;
+      } else {
+        if (colorType & PNG_COLOR_MASK_ALPHA) {
+          inType = TYPE_GRAYA_8;
+        } else {
+          inType = TYPE_GRAY_8;
+        }
+      }
+
+      transform =
+          cmsCreateTransform(src_profile, inType, target_profile, TYPE_RGBA_8,
+                             cmsGetHeaderRenderingIntent(src_profile), 0);
+
+      cmsCloseProfile(src_profile);
+    }
   }
-  if (!(colorType & (uint8_t)PNG_COLOR_MASK_ALPHA)) {
-    png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
+
+  if (!transform) {
+    png_set_expand(png);
+    if (colorType == PNG_COLOR_TYPE_GRAY ||
+        colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
+      png_set_gray_to_rgb(png);
+    }
+    if (!(colorType & PNG_COLOR_MASK_ALPHA)) {
+      png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
+    }
   }
 
   int32_t passes = png_set_interlace_handling(png);
 
-  uint32_t inComponents = 4; // RGB565 is not supported by libpng
+  png_read_update_info(png, pinfo);
+
+  uint32_t inComponents = png_get_channels(png, pinfo);
   uint32_t inStride = info.imageWidth * inComponents;
   uint32_t inStrideOffset = inRect.x * inComponents;
 
-  uint32_t outStride = outRect.width * (rgb565 ? 2 : 4);
+  uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
   uint8_t* outPixelsPos = outPixels;
 
-  auto rowFn = rgb565 ? &RGBA8888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
+  auto rowFn = (transform || !rgb565) ? &RGBA8888_to_RGBA8888_row
+                                      : &RGBA8888_to_RGB565_row;
 
+  std::vector<uint8_t> CMSLine;
   if (sampleSize == 1) {
     uint32_t inRemainY = info.imageHeight - inRect.height - inRect.y;
 
     if (passes == 1) {
+      if (!useTransform && transform) {
+        CMSLine.resize(4 * outRect.width);
+      }
+
       auto inRow = std::make_unique<uint8_t[]>(inStride);
       auto* inRowPtr = inRow.get();
 
       png_skip_rows(png, inRect.y);
       for (uint32_t i = 0; i < inRect.height; ++i) {
         png_read_row(png, inRowPtr, nullptr);
-        rowFn(outPixelsPos, inRowPtr + inStrideOffset, nullptr, outRect.width,
-              1);
+        uint8_t* rowToWrite = inRowPtr + inStrideOffset;
+
+        if (!useTransform && transform) {
+          cmsDoTransform(transform, rowToWrite, CMSLine.data(), outRect.width);
+          rowToWrite = CMSLine.data();
+        }
+
+        rowFn(outPixelsPos, rowToWrite, nullptr, outRect.width, 1);
         outPixelsPos += outStride;
       }
       png_skip_rows(png, inRemainY);
     } else {
+      if (!useTransform && transform) {
+        CMSLine.resize(info.imageWidth * inRect.height * 4);
+      }
       auto inPixels = std::make_unique<uint8_t[]>(inStride * inRect.height);
       auto* inPixelsPos = inPixels.get();
 
@@ -189,6 +251,13 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
         png_skip_rows(png, inRemainY);
         inPixelsPos = inPixels.get();
       }
+
+      if (!useTransform && transform) {
+        cmsDoTransform(transform, inPixelsPos, CMSLine.data(),
+                       info.imageWidth * inRect.height);
+        inPixelsPos = CMSLine.data();
+      }
+
       for (uint32_t i = 0; i < inRect.height; ++i) {
         rowFn(outPixelsPos, inPixelsPos + inStrideOffset, nullptr,
               outRect.width, sampleSize);
@@ -201,23 +270,43 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     uint32_t skipEnd = sampleSize - 2 - skipStart;
 
     if (passes == 1) {
+      std::vector<uint8_t> CMSLine2;
+      if (!useTransform && transform) {
+        CMSLine.resize(outRect.width * 4);
+        CMSLine2.resize(outRect.width * 4);
+      }
+
       auto inRow1 = std::make_unique<uint8_t[]>(inStride);
       auto inRow2 = std::make_unique<uint8_t[]>(inStride);
       auto* inRow1Ptr = inRow1.get();
       auto* inRow2Ptr = inRow2.get();
-
       png_skip_rows(png, inRect.y);
 
       for (uint32_t i = 0; i < outRect.height; ++i) {
         png_skip_rows(png, skipStart);
         png_read_row(png, inRow1Ptr, nullptr);
         png_read_row(png, inRow2Ptr, nullptr);
-        rowFn(outPixelsPos, inRow1Ptr + inStrideOffset,
-              inRow2Ptr + inStrideOffset, outRect.width, sampleSize);
+        uint8_t* row1ToWrite = inRow1Ptr + inStrideOffset;
+        uint8_t* row2ToWrite = inRow2Ptr + inStrideOffset;
+
+        if (!useTransform && transform) {
+          cmsDoTransform(transform, row1ToWrite, CMSLine.data(), outRect.width);
+          cmsDoTransform(transform, row2ToWrite, CMSLine2.data(),
+                         outRect.width);
+          row1ToWrite = CMSLine.data();
+          row2ToWrite = CMSLine2.data();
+        }
+
+        rowFn(outPixelsPos, row1ToWrite, row2ToWrite, outRect.width,
+              sampleSize);
         png_skip_rows(png, skipEnd);
         outPixelsPos += outStride;
       }
     } else {
+      if (!useTransform && transform) {
+        CMSLine.resize(info.imageWidth * outRect.height * 8);
+      }
+
       auto tmpPixels =
           std::make_unique<uint8_t[]>(inStride * outRect.height * 2);
       auto* tmpPixelsPos = tmpPixels.get();
@@ -237,6 +326,12 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
         }
         png_skip_rows(png, inRemainY);
         tmpPixelsPos = tmpPixels.get();
+      }
+
+      if (!useTransform && transform) {
+        cmsDoTransform(transform, tmpPixelsPos, CMSLine.data(),
+                       info.imageWidth * outRect.height * 2);
+        tmpPixelsPos = CMSLine.data();
       }
 
       for (uint32_t i = 0; i < outRect.height; ++i) {

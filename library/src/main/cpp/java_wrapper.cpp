@@ -6,13 +6,11 @@
 #include "decoders.h"
 #include "java_objects.h"
 #include "java_stream.h"
+#include "row_convert.h"
 #include <android/bitmap.h>
+#include <include/lcms2.h>
 #include <jni.h>
 #include <vector>
-
-#ifdef HAVE_LCMS
-#include <include/lcms2.h>
-#endif
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
   JNIEnv* env;
@@ -113,104 +111,59 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     return nullptr;
   }
 
+  cmsHPROFILE target_profile = nullptr;
+  if (apply_cms) {
+    if (icm_stream != NULL) {
+      int icm_stream_len = env->GetArrayLength(icm_stream);
+      if (icm_stream_len > 0) {
+        std::vector<uint8_t> icm_buf(icm_stream_len);
+        env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
+                                reinterpret_cast<jbyte*>(icm_buf.data()));
+
+        target_profile = cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
+      }
+    }
+
+    if (!target_profile) {
+      target_profile = cmsCreate_sRGBProfile();
+    }
+  }
+
   try {
-    decoder->decode(pixels, outRect, inRect, rgb565, sampleSize);
+    if (apply_cms) {
+      std::vector<uint8_t> out_buffer(outRect.width * outRect.height * 4);
+      decoder->decode(out_buffer.data(), outRect, inRect, rgb565, sampleSize,
+                      target_profile);
+
+      if (target_profile) {
+        cmsCloseProfile(target_profile);
+      }
+
+      if (decoder->useTransform && decoder->transform) {
+        cmsDoTransform(decoder->transform, out_buffer.data(), out_buffer.data(),
+                       outRect.width * outRect.height);
+      }
+
+      // If any transform has been done, it should be output as rgba.
+      if (decoder->transform && rgb565) {
+        RGBA8888_to_RGB565_row(pixels, out_buffer.data(), nullptr,
+                               outRect.width * outRect.height, 1);
+      } else if (rgb565) {
+        RGB565_to_RGB565_row(pixels, out_buffer.data(), nullptr,
+                             outRect.width * outRect.height, 1);
+      } else {
+        RGBA8888_to_RGBA8888_row(pixels, out_buffer.data(), nullptr,
+                                 outRect.width * outRect.height, 1);
+      }
+    } else {
+      decoder->decode(pixels, outRect, inRect, rgb565, sampleSize,
+                      target_profile);
+    }
   } catch (std::exception& ex) {
     LOGE("%s", ex.what());
     AndroidBitmap_unlockPixels(env, bitmap);
     return nullptr;
   }
-
-#ifdef HAVE_LCMS
-  auto embedded_icc = decoder->info.icc_profile;
-
-  if (apply_cms && (!embedded_icc.empty() || icm_stream != NULL)) {
-    cmsHPROFILE src_profile;
-    cmsHPROFILE target_profile;
-
-    if (embedded_icc.empty()) {
-      src_profile = cmsCreate_sRGBProfile();
-    } else {
-      try {
-        src_profile =
-            cmsOpenProfileFromMem(embedded_icc.data(), embedded_icc.size());
-
-        cmsColorSpaceSignature src_colorspace = cmsGetColorSpace(src_profile);
-        if (src_colorspace == cmsSigGrayData) {
-          cmsCloseProfile(src_profile);
-          src_profile = cmsCreate_sRGBProfile();
-        }
-      } catch (std::exception& ex) {
-        src_profile = cmsCreate_sRGBProfile();
-      }
-    }
-
-    uint8_t* col_buf;
-    std::vector<uint8_t> color;
-    if (rgb565) {
-      color.resize(outRect.width * outRect.height * 4);
-      uint16_t* pixels_buf = (uint16_t*)pixels;
-      for (int i = 0; i < outRect.width * outRect.height; i++) {
-        uint8_t r = (pixels_buf[i] & 0xF800) >> 8;
-        uint8_t g = (pixels_buf[i] & 0x07E0) >> 3;
-        uint8_t b = (pixels_buf[i] & 0x001F) << 3;
-        color[i * 4 + 0] = r;
-        color[i * 4 + 1] = g;
-        color[i * 4 + 2] = b;
-        color[i * 4 + 3] = 255;
-      }
-      col_buf = color.data();
-    } else {
-      col_buf = pixels;
-    }
-
-    if (icm_stream != NULL) {
-      int icm_stream_len = env->GetArrayLength(icm_stream);
-      try {
-        if (icm_stream_len > 0) {
-          std::vector<uint8_t> icm_buf(icm_stream_len);
-          env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
-                                  reinterpret_cast<jbyte*>(icm_buf.data()));
-
-          target_profile =
-              cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
-        } else {
-          target_profile = cmsCreate_sRGBProfile();
-        }
-      } catch (std::exception& ex) {
-        target_profile = cmsCreate_sRGBProfile();
-      }
-    } else {
-      target_profile = cmsCreate_sRGBProfile();
-    }
-
-    try {
-      auto transform = cmsCreateTransform(
-          src_profile, TYPE_RGBA_8, target_profile, TYPE_RGBA_8,
-          cmsGetHeaderRenderingIntent(target_profile), 0);
-
-      cmsDoTransform(transform, col_buf, col_buf,
-                     outRect.width * outRect.height);
-
-      cmsDeleteTransform(transform);
-    } catch (std::exception& ex) {
-      LOGE("%s", ex.what());
-    }
-
-    cmsCloseProfile(src_profile);
-    cmsCloseProfile(target_profile);
-
-    if (rgb565) {
-      uint16_t* pixels_buf = (uint16_t*)pixels;
-      for (int i = 0; i < outRect.width * outRect.height; i++) {
-        uint16_t c = (((col_buf[i * 4 + 0]) << 8) & 0xF800) |
-                     (((col_buf[i * 4 + 1]) << 3) & 0x07E0) |
-                     (((col_buf[i * 4 + 2]) >> 3) & 0x001F);
-        pixels_buf[i] = c;
-      }
-    }
-  }
-#endif
 
   AndroidBitmap_unlockPixels(env, bitmap);
   return bitmap;
