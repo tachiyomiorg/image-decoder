@@ -21,5 +21,9 @@ set(JPEGXL_ENABLE_BENCHMARK OFF CACHE INTERNAL "")
 
 FetchContent_MakeAvailable(libjxl)
 
-target_include_directories(imagedecoder PRIVATE ${libjxl_BINARY_DIR} ${libjxl_SOURCE_DIR})
-target_link_libraries(imagedecoder jxl_dec-static jxl_threads-static)
+target_include_directories(imagedecoder PRIVATE
+    ${libjxl_BINARY_DIR}
+    ${libjxl_SOURCE_DIR}
+    $<TARGET_PROPERTY:lcms2,INCLUDE_DIRECTORIES>
+)
+target_link_libraries(imagedecoder jxl_dec-static jxl_threads-static lcms2)

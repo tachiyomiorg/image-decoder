@@ -8,7 +8,7 @@
 #include "java_stream.h"
 #include "row_convert.h"
 #include <android/bitmap.h>
-#include <include/lcms2.h>
+#include <lcms2.h>
 #include <jni.h>
 #include <vector>
 

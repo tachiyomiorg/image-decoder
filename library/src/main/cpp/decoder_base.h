@@ -7,7 +7,7 @@
 
 #include "borders.h"
 #include "java_stream.h"
-#include <include/lcms2.h>
+#include <lcms2.h>
 #include <vector>
 
 struct ImageInfo {
