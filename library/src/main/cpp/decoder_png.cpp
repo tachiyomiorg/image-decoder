@@ -147,6 +147,8 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   uint8_t colorType = png_get_color_type(png, pinfo);
   uint8_t bitDepth = png_get_bit_depth(png, pinfo);
 
+  png_set_expand(png);
+
   if (bitDepth == 16) {
     png_set_scale_16(png);
   }
@@ -159,7 +161,6 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
 
       cmsUInt32Number inType;
       if (useTransform) {
-        png_set_expand(png);
         if (colorType == PNG_COLOR_TYPE_GRAY ||
             colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
           png_set_gray_to_rgb(png);
@@ -185,7 +186,6 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   }
 
   if (!transform) {
-    png_set_expand(png);
     if (colorType == PNG_COLOR_TYPE_GRAY ||
         colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
       png_set_gray_to_rgb(png);
@@ -256,11 +256,13 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
         cmsDoTransform(transform, inPixelsPos, CMSLine.data(),
                        info.imageWidth * inRect.height);
         inPixelsPos = CMSLine.data();
+        inStride = info.imageWidth * 4;
+        inStrideOffset = inRect.x * 4;
       }
 
       for (uint32_t i = 0; i < inRect.height; ++i) {
         rowFn(outPixelsPos, inPixelsPos + inStrideOffset, nullptr,
-              outRect.width, sampleSize);
+              outRect.width, 1);
         inPixelsPos += inStride;
         outPixelsPos += outStride;
       }
@@ -272,14 +274,15 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     if (passes == 1) {
       std::vector<uint8_t> CMSLine2;
       if (!useTransform && transform) {
-        CMSLine.resize(outRect.width * 4);
-        CMSLine2.resize(outRect.width * 4);
+        CMSLine.resize(outRect.width * 4 * sampleSize);
+        CMSLine2.resize(outRect.width * 4 * sampleSize);
       }
 
       auto inRow1 = std::make_unique<uint8_t[]>(inStride);
       auto inRow2 = std::make_unique<uint8_t[]>(inStride);
       auto* inRow1Ptr = inRow1.get();
       auto* inRow2Ptr = inRow2.get();
+
       png_skip_rows(png, inRect.y);
 
       for (uint32_t i = 0; i < outRect.height; ++i) {
@@ -290,9 +293,10 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
         uint8_t* row2ToWrite = inRow2Ptr + inStrideOffset;
 
         if (!useTransform && transform) {
-          cmsDoTransform(transform, row1ToWrite, CMSLine.data(), outRect.width);
+          cmsDoTransform(transform, row1ToWrite, CMSLine.data(),
+                         outRect.width * sampleSize);
           cmsDoTransform(transform, row2ToWrite, CMSLine2.data(),
-                         outRect.width);
+                         outRect.width * sampleSize);
           row1ToWrite = CMSLine.data();
           row2ToWrite = CMSLine2.data();
         }
@@ -332,6 +336,8 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
         cmsDoTransform(transform, tmpPixelsPos, CMSLine.data(),
                        info.imageWidth * outRect.height * 2);
         tmpPixelsPos = CMSLine.data();
+        inStride = info.imageWidth * 4;
+        inStrideOffset = inRect.x * 4;
       }
 
       for (uint32_t i = 0; i < outRect.height; ++i) {
