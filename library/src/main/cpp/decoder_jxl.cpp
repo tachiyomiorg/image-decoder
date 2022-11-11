@@ -29,6 +29,7 @@ std::vector<uint8_t> decodeRGB(const uint8_t* data, size_t size,
   }
 
   JxlDecoderSetInput(dec.get(), data, size);
+  JxlDecoderCloseInput(dec.get());
 
   std::vector<uint8_t> pixels;
   for (;;) {

@@ -1,6 +1,6 @@
 FetchContent_Declare(libde265
   GIT_REPOSITORY  https://github.com/strukturag/libde265.git
-  GIT_TAG         v1.0.8
+  GIT_TAG         v1.0.9
   BINARY_DIR      libde265-build
   SUBBUILD_DIR    libde265-subbuild
 )
