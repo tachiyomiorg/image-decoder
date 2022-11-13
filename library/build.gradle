@@ -1,7 +1,10 @@
 plugins {
     id 'com.android.library'
     id 'kotlin-android'
+    id 'maven-publish'
 }
+
+group = 'tachiyomiorg'
 
 android {
     compileSdkVersion 33
@@ -42,4 +45,18 @@ android {
 }
 
 dependencies {
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            // Creates a Maven publication called "release".
+            release(MavenPublication) {
+                from components.release
+                groupId = 'tachiyomiorg'
+                artifactId = 'image-decoder'
+                version = '1.0'
+            }
+        }
+    }
 }
