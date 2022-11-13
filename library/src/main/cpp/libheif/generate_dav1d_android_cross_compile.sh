@@ -21,7 +21,7 @@ elif [[ -z "${ANDROID_NDK}" ]] ; then
   exit 1
 fi
 
-ANDROID_API=23
+ANDROID_API=21
 
 case "${ARCH}" in
   'arm')
