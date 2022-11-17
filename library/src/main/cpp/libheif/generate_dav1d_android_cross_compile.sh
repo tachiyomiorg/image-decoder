@@ -74,9 +74,9 @@ cat <<EOF > $user_config
 name = 'android'
 c     = '${CROSS_PREFIX}/${ARCH_TRIPLET_VARIANT}${ANDROID_API}-clang'
 cpp   = '${CROSS_PREFIX}/${ARCH_TRIPLET_VARIANT}${ANDROID_API}-clang++'
-ar    = '${CROSS_PREFIX}/${ARCH_TRIPLET}-ar'
-ld    = '${CROSS_PREFIX}/${ARCH_TRIPLET}-ld'
-strip = '${CROSS_PREFIX}/${ARCH_TRIPLET}-strip'
+ar    = '${CROSS_PREFIX}/llvm-ar'
+ld    = '${CROSS_PREFIX}/llvm-ld'
+strip = '${CROSS_PREFIX}/llvm-strip'
 
 [properties]
 needs_exe_wrapper = true
