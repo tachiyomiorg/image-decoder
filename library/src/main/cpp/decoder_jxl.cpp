@@ -142,10 +142,12 @@ ImageInfo JpegxlDecoder::parseInfo() {
         .x = 0, .y = 0, .width = jxl_info.xsize, .height = jxl_info.ysize};
   }
 
-  return ImageInfo{.imageWidth = jxl_info.xsize,
-                   .imageHeight = jxl_info.ysize,
-                   .isAnimated = false, // (bool)jxl_info.have_animation,
-                   .bounds = bounds};
+  return ImageInfo{
+      .imageWidth = jxl_info.xsize,
+      .imageHeight = jxl_info.ysize,
+      .isAnimated = false, // (bool)jxl_info.have_animation,
+      .bounds = bounds,
+  };
 }
 
 void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,

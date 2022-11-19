@@ -24,9 +24,9 @@ bool is_gif(const uint8_t* data) {
 }
 
 enum ftyp_image_type {
-    ftyp_image_type_no,
-    ftyp_image_type_heif,
-    ftyp_image_type_avif
+  ftyp_image_type_no,
+  ftyp_image_type_heif,
+  ftyp_image_type_avif
 };
 
 ftyp_image_type get_ftyp_image_type(const uint8_t* data, uint32_t size) {
@@ -39,7 +39,8 @@ ftyp_image_type get_ftyp_image_type(const uint8_t* data, uint32_t size) {
   uint32_t offset = 8;
   while (offset <= maxOffset) {
     auto brand = data + offset;
-    if (brand[0] == 'h' && brand[1] == 'e' && (brand[2] == 'i' || brand[2] == 'v')) {
+    if (brand[0] == 'h' && brand[1] == 'e' &&
+        (brand[2] == 'i' || brand[2] == 'v')) {
       return ftyp_image_type_heif;
     } else if (brand[0] == 'a' && brand[1] == 'v' && brand[2] == 'i') {
       return ftyp_image_type_avif;
@@ -58,4 +59,4 @@ bool is_jxl(const uint8_t* data) {
          (data[0] == 0xff && data[1] == 0x0a);    // codestream
 }
 
-#endif //IMAGEDECODER_DECODER_HEADERS_H
+#endif // IMAGEDECODER_DECODER_HEADERS_H

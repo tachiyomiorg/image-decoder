@@ -9,14 +9,15 @@
 
 bool is_libheif_compatible(const uint8_t* bytes, uint32_t size);
 
-class HeifDecoder: public BaseDecoder {
+class HeifDecoder : public BaseDecoder {
 public:
-    HeifDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
+  HeifDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
-    void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize);
+  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
+              uint32_t sampleSize);
 
 private:
-    ImageInfo parseInfo();
+  ImageInfo parseInfo();
 };
 
-#endif //IMAGEDECODER_DECODER_HEIF_H
+#endif // IMAGEDECODER_DECODER_HEIF_H

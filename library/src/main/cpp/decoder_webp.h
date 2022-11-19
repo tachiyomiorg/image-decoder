@@ -9,14 +9,15 @@
 #include <src/webp/decode.h>
 #include <src/webp/demux.h>
 
-class WebpDecoder: public BaseDecoder {
+class WebpDecoder : public BaseDecoder {
 public:
   WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
-  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize);
+  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
+              uint32_t sampleSize);
 
 private:
   ImageInfo parseInfo();
 };
 
-#endif //IMAGEDECODER_DECODER_WEBP_H
+#endif // IMAGEDECODER_DECODER_WEBP_H

@@ -3,34 +3,31 @@
 //
 
 #include "decoder_jpeg.h"
-#include <algorithm>
 #include "row_convert.h"
+#include <algorithm>
 
-JpegDecoder::JpegDecoder(
-  std::shared_ptr<Stream>&& stream,
-  bool cropBorders
-) : BaseDecoder(std::move(stream), cropBorders) {
+JpegDecoder::JpegDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
+    : BaseDecoder(std::move(stream), cropBorders) {
   this->info = parseInfo();
 }
 
-JpegDecodeSession::JpegDecodeSession() : jinfo(jpeg_decompress_struct{}), jerr(jpeg_error_mgr{}) {
+JpegDecodeSession::JpegDecodeSession()
+    : jinfo(jpeg_decompress_struct{}), jerr(jpeg_error_mgr{}) {
   jinfo.err = jpeg_std_error(&jerr);
-  jerr.error_exit = [](j_common_ptr info){
+  jerr.error_exit = [](j_common_ptr info) {
     char jpegLastErrorMsg[JMSG_LENGTH_MAX];
     (*(info->err->format_message))(info, jpegLastErrorMsg);
     throw std::runtime_error(jpegLastErrorMsg);
   };
 }
 
-void JpegDecodeSession::init(Stream *stream) {
+void JpegDecodeSession::init(Stream* stream) {
   jpeg_create_decompress(&jinfo);
   jpeg_mem_src(&jinfo, stream->bytes, stream->size);
   jpeg_read_header(&jinfo, true);
 }
 
-JpegDecodeSession::~JpegDecodeSession() {
-  jpeg_destroy_decompress(&jinfo);
-}
+JpegDecodeSession::~JpegDecodeSession() { jpeg_destroy_decompress(&jinfo); }
 
 std::unique_ptr<JpegDecodeSession> JpegDecoder::initDecodeSession() {
   auto session = std::make_unique<JpegDecodeSession>();
@@ -45,7 +42,7 @@ ImageInfo JpegDecoder::parseInfo() {
   uint32_t imageWidth = jinfo.image_width;
   uint32_t imageHeight = jinfo.image_height;
 
-  Rect bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
+  Rect bounds = {.x = 0, .y = 0, .width = imageWidth, .height = imageHeight};
   if (cropBorders) {
     try {
       auto pixels = std::make_unique<uint8_t[]>(imageWidth * imageHeight);
@@ -53,27 +50,29 @@ ImageInfo JpegDecoder::parseInfo() {
       jinfo.out_color_space = JCS_GRAYSCALE;
       jpeg_start_decompress(&jinfo);
 
-      uint8_t *pixelsPtr = pixels.get();
+      uint8_t* pixelsPtr = pixels.get();
       while (jinfo.output_scanline < jinfo.output_height) {
-        uint8_t *offset = pixelsPtr + jinfo.output_scanline * imageWidth;
+        uint8_t* offset = pixelsPtr + jinfo.output_scanline * imageWidth;
         jpeg_read_scanlines(&jinfo, &offset, 1);
       }
       jpeg_finish_decompress(&jinfo);
       bounds = findBorders(pixels.get(), imageWidth, imageHeight);
-    } catch (std::exception &ex) {
-      LOGW("Couldn't crop borders on a JPEG image of size %dx%d", imageWidth, imageHeight);
+    } catch (std::exception& ex) {
+      LOGW("Couldn't crop borders on a JPEG image of size %dx%d", imageWidth,
+           imageHeight);
     }
   }
 
-  return ImageInfo {
-    .imageWidth = jinfo.image_width,
-    .imageHeight = jinfo.image_height,
-    .isAnimated = false,
-    .bounds = bounds
+  return ImageInfo{
+      .imageWidth = jinfo.image_width,
+      .imageHeight = jinfo.image_height,
+      .isAnimated = false,
+      .bounds = bounds,
   };
 }
 
-void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize) {
+void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
+                         bool rgb565, uint32_t sampleSize) {
   auto session = initDecodeSession();
   auto* jinfo = &session->jinfo;
 
@@ -83,13 +82,14 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb
     jinfo->dither_mode = JDITHER_NONE;
   }
 
-  // 8 is the maximum supported scale by libjpeg, so we'll use custom logic for further samples.
+  // 8 is the maximum supported scale by libjpeg, so we'll use custom logic for
+  // further samples.
   jinfo->scale_denom = std::min(sampleSize, 8u);
   uint32_t customSample = sampleSize <= 8 ? 0 : sampleSize / 8;
   Rect decRect = customSample == 0 ? outRect : outRect.upsample(customSample);
 
-  // libjpeg X axis need to be a multiple of the defined DCT. We need to know these values
-  // in order to crop the unwanted region of the final image.
+  // libjpeg X axis need to be a multiple of the defined DCT. We need to know
+  // these values in order to crop the unwanted region of the final image.
   uint32_t decX = decRect.x;
   uint32_t decWidth = decRect.width;
 
@@ -103,7 +103,8 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb
   uint32_t inStride = decWidth * pixelSize;
   uint32_t inStartStride = (decRect.x - decX) * pixelSize;
 
-  // Allocate row and get pointers to the row and the row aligned for output image.
+  // Allocate row and get pointers to the row and the row aligned for output
+  // image.
   auto inRow = std::make_unique<uint8_t[]>(inStride);
   uint8_t* inRowPtr = inRow.get();
   uint8_t* inRowPtrAligned = inRowPtr + inStartStride;
@@ -121,7 +122,8 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb
     }
   } else {
     // Custom sampler needed, we need to decode two rows and downsample them.
-    // Allocate second row and get pointers to the row and the row aligned for output image.
+    // Allocate second row and get pointers to the row and the row aligned for
+    // output image.
     auto inRow2 = std::make_unique<uint8_t[]>(inStride);
     uint8_t* inRow2Ptr = inRow2.get();
     uint8_t* inRow2PtrAligned = inRow2Ptr + inStartStride;
@@ -138,7 +140,8 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb
       jpeg_read_scanlines(jinfo, &inRowPtr, 1);
       jpeg_read_scanlines(jinfo, &inRow2Ptr, 1);
 
-      rowFn(outPixelsPos, inRowPtrAligned, inRow2PtrAligned, outRect.width, customSample);
+      rowFn(outPixelsPos, inRowPtrAligned, inRow2PtrAligned, outRect.width,
+            customSample);
       outPixelsPos += outStride;
 
       jpeg_skip_scanlines(jinfo, skipEnd);

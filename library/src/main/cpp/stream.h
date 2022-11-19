@@ -6,10 +6,10 @@
 #define IMAGEDECODER_STREAM_H
 
 struct Stream {
-    uint8_t* bytes;
-    uint32_t size;
+  uint8_t* bytes;
+  uint32_t size;
 
-    Stream(uint8_t* bytes, uint32_t size) : bytes(bytes), size(size) {}
+  Stream(uint8_t* bytes, uint32_t size) : bytes(bytes), size(size) {}
 };
 
-#endif //IMAGEDECODER_STREAM_H
+#endif // IMAGEDECODER_STREAM_H
