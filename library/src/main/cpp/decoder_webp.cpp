@@ -4,10 +4,8 @@
 
 #include "decoder_webp.h"
 
-WebpDecoder::WebpDecoder(
-  std::shared_ptr<Stream>&& stream,
-  bool cropBorders
-) : BaseDecoder(std::move(stream), cropBorders) {
+WebpDecoder::WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
+    : BaseDecoder(std::move(stream), cropBorders) {
   this->info = parseInfo();
 }
 
@@ -21,35 +19,39 @@ ImageInfo WebpDecoder::parseInfo() {
   uint32_t imageHeight = features.height;
   bool isAnimated = features.has_animation;
 
-  Rect bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
+  Rect bounds = {.x = 0, .y = 0, .width = imageWidth, .height = imageHeight};
   if (!isAnimated && cropBorders) {
     int iw = features.width;
     int ih = features.height;
     uint8_t *u, *v;
     int stride, uvStride;
-    auto* luma = WebPDecodeYUV(stream->bytes, stream->size, &iw, &ih, &u, &v, &stride, &uvStride);
+    auto* luma = WebPDecodeYUV(stream->bytes, stream->size, &iw, &ih, &u, &v,
+                               &stride, &uvStride);
     if (luma != nullptr) {
       bounds = findBorders(luma, imageWidth, imageHeight);
       WebPFree(luma);
     } else {
-      LOGW("Couldn't crop borders on a WebP image of size %dx%d", imageWidth, imageHeight);
+      LOGW("Couldn't crop borders on a WebP image of size %dx%d", imageWidth,
+           imageHeight);
     }
   }
 
-  return ImageInfo {
-    .imageWidth = imageWidth,
-    .imageHeight = imageHeight,
-    .isAnimated = isAnimated,
-    .bounds = bounds
+  return ImageInfo{
+      .imageWidth = imageWidth,
+      .imageHeight = imageHeight,
+      .isAnimated = isAnimated,
+      .bounds = bounds,
   };
 }
 
-void WebpDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize) {
+void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
+                         bool rgb565, uint32_t sampleSize) {
   WebPDecoderConfig config;
   WebPInitDecoderConfig(&config);
 
   // Set decode region
-  config.options.use_cropping = inRect.width != info.imageWidth || inRect.height != info.imageHeight;
+  config.options.use_cropping =
+      inRect.width != info.imageWidth || inRect.height != info.imageHeight;
   config.options.crop_left = inRect.x;
   config.options.crop_top = inRect.y;
   config.options.crop_width = inRect.width;
@@ -73,10 +75,8 @@ void WebpDecoder::decode(uint8_t *outPixels, Rect outRect, Rect inRect, bool rgb
     code = WebPDecode(stream->bytes, stream->size, &config);
   } else {
     WebPData data = {.bytes = stream->bytes, .size = stream->size};
-    auto demuxer = std::unique_ptr<WebPDemuxer, decltype(&WebPDemuxDelete)> {
-      WebPDemux(&data),
-      WebPDemuxDelete
-    };
+    auto demuxer = std::unique_ptr<WebPDemuxer, decltype(&WebPDemuxDelete)>{
+        WebPDemux(&data), WebPDemuxDelete};
 
     WebPIterator iterator;
     if (!WebPDemuxGetFrame(demuxer.get(), 1, &iterator)) {

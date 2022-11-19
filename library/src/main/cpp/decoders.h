@@ -22,4 +22,4 @@
 #include "decoder_jxl.h"
 #endif
 
-#endif //IMAGEDECODER_DECODERS_H
+#endif // IMAGEDECODER_DECODERS_H

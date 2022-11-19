@@ -17,24 +17,24 @@
 #ifndef IMAGE_IMAGE_CONVERT_H
 #define IMAGE_IMAGE_CONVERT_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdbool.h>
 
-void RGBA8888_to_RGBA8888_row(uint8_t* dst,
-    const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio);
+void RGBA8888_to_RGBA8888_row(uint8_t* dst, const uint8_t* src1,
+                              const uint8_t* src2, uint32_t d_width,
+                              uint32_t ratio);
 
-void RGBA8888_to_RGB565_row(uint8_t* dst,
-    const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio);
+void RGBA8888_to_RGB565_row(uint8_t* dst, const uint8_t* src1,
+                            const uint8_t* src2, uint32_t d_width,
+                            uint32_t ratio);
 
-void RGB565_to_RGB565_row(uint8_t* dst,
-    const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio);
+void RGB565_to_RGB565_row(uint8_t* dst, const uint8_t* src1,
+                          const uint8_t* src2, uint32_t d_width,
+                          uint32_t ratio);
 
-void RGB888_to_RGB565_row(uint8_t* dst,
-    const uint8_t* src1, const uint8_t* src2,
-    uint32_t d_width, uint32_t ratio);
+void RGB888_to_RGB565_row(uint8_t* dst, const uint8_t* src1,
+                          const uint8_t* src2, uint32_t d_width,
+                          uint32_t ratio);
 
-#endif //IMAGE_IMAGE_CONVERT_H
+#endif // IMAGE_IMAGE_CONVERT_H

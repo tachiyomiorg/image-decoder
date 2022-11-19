@@ -12,16 +12,14 @@ static void png_skip_rows(png_structrp png_ptr, png_uint_32 num_rows) {
   }
 }
 
-PngDecoder::PngDecoder(
-  std::shared_ptr<Stream>&& stream,
-  bool cropBorders
-) : BaseDecoder(std::move(stream), cropBorders) {
+PngDecoder::PngDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
+    : BaseDecoder(std::move(stream), cropBorders) {
   this->info = parseInfo();
 }
 
-PngDecodeSession::PngDecodeSession(Stream* stream) : png(nullptr), pinfo(nullptr),
-  reader({ .bytes = stream->bytes, .read = 0, .remain = stream->size }) {
-}
+PngDecodeSession::PngDecodeSession(Stream* stream)
+    : png(nullptr), pinfo(nullptr),
+      reader({.bytes = stream->bytes, .read = 0, .remain = stream->size}) {}
 
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "EndlessLoop"
@@ -29,9 +27,7 @@ void PngDecodeSession::init() {
   auto errorFn = [](png_struct*, png_const_charp msg) {
     throw std::runtime_error(msg);
   };
-  auto warnFn = [](png_struct*, png_const_charp msg) {
-    LOGW("%s", msg);
-  };
+  auto warnFn = [](png_struct*, png_const_charp msg) { LOGW("%s", msg); };
   png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, errorFn, warnFn);
   if (!png) {
     throw std::runtime_error("Failed to create png read struct");
@@ -42,8 +38,8 @@ void PngDecodeSession::init() {
   }
 
   auto readFn = [](png_struct* p, png_byte* data, png_size_t length) {
-    auto* r = (PngReader*) png_get_io_ptr(p);
-    uint32_t next = std::min(r->remain, (uint32_t) length);
+    auto* r = (PngReader*)png_get_io_ptr(p);
+    uint32_t next = std::min(r->remain, (uint32_t)length);
     if (next > 0) {
       memcpy(data, r->bytes + r->read, next);
       r->read += next;
@@ -73,7 +69,7 @@ ImageInfo PngDecoder::parseInfo() {
   uint32_t imageWidth = png_get_image_width(png, pinfo);
   uint32_t imageHeight = png_get_image_height(png, pinfo);
 
-  Rect bounds = { .x = 0, .y = 0, .width = imageWidth, .height = imageHeight };
+  Rect bounds = {.x = 0, .y = 0, .width = imageWidth, .height = imageHeight};
   if (cropBorders) {
     try {
       auto pixels = std::make_unique<uint8_t[]>(imageWidth * imageHeight);
@@ -85,10 +81,10 @@ ImageInfo PngDecoder::parseInfo() {
       if (bitDepth == 16) {
         png_set_scale_16(png);
       }
-      if (colorType & (uint8_t) PNG_COLOR_MASK_COLOR) {
+      if (colorType & (uint8_t)PNG_COLOR_MASK_COLOR) {
         png_set_rgb_to_gray(png, 1, -1, -1);
         png_set_strip_alpha(png);
-      } else if (colorType & (uint8_t) PNG_COLOR_MASK_ALPHA) {
+      } else if (colorType & (uint8_t)PNG_COLOR_MASK_ALPHA) {
         png_set_strip_alpha(png);
       }
 
@@ -103,20 +99,22 @@ ImageInfo PngDecoder::parseInfo() {
         }
       }
       bounds = findBorders(pixels.get(), imageWidth, imageHeight);
-    } catch (std::bad_alloc &ex) {
-      LOGW("Couldn't crop borders on a PNG image of size %dx%d", imageWidth, imageHeight);
+    } catch (std::bad_alloc& ex) {
+      LOGW("Couldn't crop borders on a PNG image of size %dx%d", imageWidth,
+           imageHeight);
     }
   }
 
-  return ImageInfo {
-    .imageWidth = imageWidth,
-    .imageHeight = imageHeight,
-    .isAnimated = false,
-    .bounds = bounds
+  return ImageInfo{
+      .imageWidth = imageWidth,
+      .imageHeight = imageHeight,
+      .isAnimated = false,
+      .bounds = bounds,
   };
 }
 
-void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize) {
+void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
+                        bool rgb565, uint32_t sampleSize) {
   auto session = initDecodeSession();
   auto png = session->png;
   auto pinfo = session->pinfo;
@@ -128,10 +126,11 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
   if (bitDepth == 16) {
     png_set_scale_16(png);
   }
-  if (colorType == PNG_COLOR_TYPE_GRAY || colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
+  if (colorType == PNG_COLOR_TYPE_GRAY ||
+      colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
     png_set_gray_to_rgb(png);
   }
-  if (!(colorType & (uint8_t) PNG_COLOR_MASK_ALPHA)) {
+  if (!(colorType & (uint8_t)PNG_COLOR_MASK_ALPHA)) {
     png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
   }
 
@@ -156,7 +155,8 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
       png_skip_rows(png, inRect.y);
       for (uint32_t i = 0; i < inRect.height; ++i) {
         png_read_row(png, inRowPtr, nullptr);
-        rowFn(outPixelsPos, inRowPtr + inStrideOffset, nullptr, outRect.width, 1);
+        rowFn(outPixelsPos, inRowPtr + inStrideOffset, nullptr, outRect.width,
+              1);
         outPixelsPos += outStride;
       }
       png_skip_rows(png, inRemainY);
@@ -174,7 +174,8 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
         inPixelsPos = inPixels.get();
       }
       for (uint32_t i = 0; i < inRect.height; ++i) {
-        rowFn(outPixelsPos, inPixelsPos + inStrideOffset, nullptr, outRect.width, sampleSize);
+        rowFn(outPixelsPos, inPixelsPos + inStrideOffset, nullptr,
+              outRect.width, sampleSize);
         inPixelsPos += inStride;
         outPixelsPos += outStride;
       }
@@ -195,12 +196,14 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
         png_skip_rows(png, skipStart);
         png_read_row(png, inRow1Ptr, nullptr);
         png_read_row(png, inRow2Ptr, nullptr);
-        rowFn(outPixelsPos, inRow1Ptr + inStrideOffset, inRow2Ptr + inStrideOffset, outRect.width, sampleSize);
+        rowFn(outPixelsPos, inRow1Ptr + inStrideOffset,
+              inRow2Ptr + inStrideOffset, outRect.width, sampleSize);
         png_skip_rows(png, skipEnd);
         outPixelsPos += outStride;
       }
     } else {
-      auto tmpPixels = std::make_unique<uint8_t[]>(inStride * outRect.height * 2);
+      auto tmpPixels =
+          std::make_unique<uint8_t[]>(inStride * outRect.height * 2);
       auto* tmpPixelsPos = tmpPixels.get();
 
       uint32_t inHeightRounded = outRect.height * sampleSize;
@@ -221,8 +224,9 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb5
       }
 
       for (uint32_t i = 0; i < outRect.height; ++i) {
-        rowFn(outPixelsPos, tmpPixelsPos + inStrideOffset, tmpPixelsPos + inStride + inStrideOffset,
-              outRect.width, sampleSize);
+        rowFn(outPixelsPos, tmpPixelsPos + inStrideOffset,
+              tmpPixelsPos + inStride + inStrideOffset, outRect.width,
+              sampleSize);
         outPixelsPos += outStride;
         tmpPixelsPos += inStride * 2;
       }

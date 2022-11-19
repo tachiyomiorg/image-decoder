@@ -18,10 +18,10 @@ struct Rect {
       return *this;
     }
     return {
-      .x = x / scale,
-      .y = y / scale,
-      .width = width / scale,
-      .height = height / scale,
+        .x = x / scale,
+        .y = y / scale,
+        .width = width / scale,
+        .height = height / scale,
     };
   }
 
@@ -30,12 +30,12 @@ struct Rect {
       return *this;
     }
     return {
-      .x = x * scale,
-      .y = y * scale,
-      .width = width * scale,
-      .height = height * scale,
+        .x = x * scale,
+        .y = y * scale,
+        .width = width * scale,
+        .height = height * scale,
     };
   }
 };
 
-#endif //IMAGEDECODER_RECT_H
+#endif // IMAGEDECODER_RECT_H

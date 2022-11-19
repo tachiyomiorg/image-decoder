@@ -27,15 +27,16 @@ public:
   void init();
 };
 
-class PngDecoder: public BaseDecoder {
+class PngDecoder : public BaseDecoder {
 public:
   PngDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
-  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize);
+  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
+              uint32_t sampleSize);
 
 private:
   ImageInfo parseInfo();
   std::unique_ptr<PngDecodeSession> initDecodeSession();
 };
 
-#endif //IMAGEDECODER_DECODER_PNG_H
+#endif // IMAGEDECODER_DECODER_PNG_H

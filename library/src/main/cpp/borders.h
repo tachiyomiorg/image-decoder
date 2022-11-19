@@ -17,7 +17,8 @@ const uint8_t thresholdForBlack = (uint8_t)(255.0 * THRESHOLD);
 
 const uint8_t thresholdForWhite = (uint8_t)(255.0 - 255.0 * THRESHOLD);
 
-/** Finds the borders of the image. This only works on bitmaps of a single component (grayscale) **/
-Rect findBorders(uint8_t *pixels, uint32_t width, uint32_t height);
+/** Finds the borders of the image. This only works on bitmaps of a single
+ * component (grayscale) **/
+Rect findBorders(uint8_t* pixels, uint32_t width, uint32_t height);
 
-#endif //IMAGEDECODER_BORDERS_H
+#endif // IMAGEDECODER_BORDERS_H

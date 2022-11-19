@@ -5,8 +5,8 @@
 #ifndef IMAGEDECODER_DECODER_BASE_H
 #define IMAGEDECODER_DECODER_BASE_H
 
-#include "java_stream.h"
 #include "borders.h"
+#include "java_stream.h"
 
 struct ImageInfo {
   uint32_t imageWidth;
@@ -21,9 +21,10 @@ public:
     this->stream = std::move(stream);
     this->cropBorders = cropBorders;
   }
-  virtual ~BaseDecoder() {};
+  virtual ~BaseDecoder(){};
 
-  virtual void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565, uint32_t sampleSize) = 0;
+  virtual void decode(uint8_t* outPixels, Rect outRect, Rect inRect,
+                      bool rgb565, uint32_t sampleSize) = 0;
 
 protected:
   std::shared_ptr<Stream> stream;
@@ -33,4 +34,4 @@ public:
   ImageInfo info;
 };
 
-#endif //IMAGEDECODER_DECODER_BASE_H
+#endif // IMAGEDECODER_DECODER_BASE_H
