@@ -13,17 +13,11 @@ set(JPEGXL_ENABLE_MANPAGES OFF CACHE INTERNAL "")
 set(JPEGXL_ENABLE_EXAMPLES OFF CACHE INTERNAL "")
 set(JPEGXL_ENABLE_SJPEG OFF CACHE INTERNAL "")
 set(JPEGXL_ENABLE_OPENEXR OFF CACHE INTERNAL "")
-set(JPEGXL_ENABLE_SKCMS OFF CACHE INTERNAL "")
-set(JPEGXL_BUNDLE_SKCMS OFF CACHE INTERNAL "")
 set(JPEGXL_ENABLE_TRANSCODE_JPEG OFF CACHE INTERNAL "")
 set(JPEGXL_ENABLE_TOOLS ON CACHE INTERNAL "")
 set(JPEGXL_ENABLE_BENCHMARK OFF CACHE INTERNAL "")
 
 FetchContent_MakeAvailable(libjxl)
 
-target_include_directories(imagedecoder PRIVATE
-    ${libjxl_BINARY_DIR}
-    ${libjxl_SOURCE_DIR}
-    $<TARGET_PROPERTY:lcms2,INCLUDE_DIRECTORIES>
-)
-target_link_libraries(imagedecoder jxl_dec-static jxl_threads-static lcms2)
+target_include_directories(imagedecoder PRIVATE ${libjxl_BINARY_DIR} ${libjxl_SOURCE_DIR})
+target_link_libraries(imagedecoder jxl_dec-static jxl_threads-static)
