@@ -83,18 +83,18 @@ cmsHPROFILE WebpDecoder::getColorProfile() {
 
 void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                          bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE target_profile) {
+                         cmsHPROFILE targetProfile) {
   WebPDecoderConfig config;
   WebPInitDecoderConfig(&config);
 
-  if (target_profile) {
+  if (targetProfile) {
     cmsHPROFILE src_profile = getColorProfile();
     if (src_profile) {
       cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
       useTransform = true;
 
       transform = cmsCreateTransform(
-          src_profile, TYPE_RGBA_8, target_profile, TYPE_RGBA_8,
+          src_profile, TYPE_RGBA_8, targetProfile, TYPE_RGBA_8,
           cmsGetHeaderRenderingIntent(src_profile), 0);
 
       cmsCloseProfile(src_profile);

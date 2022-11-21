@@ -32,7 +32,7 @@ public:
   PngDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
   void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
-              uint32_t sampleSize, cmsHPROFILE target_profile);
+              uint32_t sampleSize, cmsHPROFILE targetProfile);
 
 private:
   ImageInfo parseInfo();

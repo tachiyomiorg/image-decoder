@@ -96,11 +96,11 @@ cmsHPROFILE JpegDecoder::getColorProfile(jpeg_decompress_struct* jinfo) {
 
 void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                          bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE target_profile) {
+                         cmsHPROFILE targetProfile) {
   auto session = initDecodeSession();
   auto* jinfo = &session->jinfo;
 
-  if (target_profile) {
+  if (targetProfile) {
     cmsHPROFILE src_profile = getColorProfile(jinfo);
     if (src_profile) {
       cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
@@ -114,7 +114,7 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
       }
 
       transform =
-          cmsCreateTransform(src_profile, inType, target_profile, TYPE_RGBA_8,
+          cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
                              cmsGetHeaderRenderingIntent(src_profile), 0);
 
       cmsCloseProfile(src_profile);

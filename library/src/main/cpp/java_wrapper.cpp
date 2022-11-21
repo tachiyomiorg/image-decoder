@@ -8,8 +8,8 @@
 #include "java_stream.h"
 #include "row_convert.h"
 #include <android/bitmap.h>
-#include <lcms2.h>
 #include <jni.h>
+#include <lcms2.h>
 #include <vector>
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -111,7 +111,7 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     return nullptr;
   }
 
-  cmsHPROFILE target_profile = nullptr;
+  cmsHPROFILE targetProfile = nullptr;
   if (apply_cms) {
     if (icm_stream != NULL) {
       int icm_stream_len = env->GetArrayLength(icm_stream);
@@ -120,12 +120,12 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
         env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
                                 reinterpret_cast<jbyte*>(icm_buf.data()));
 
-        target_profile = cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
+        targetProfile = cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
       }
     }
 
-    if (!target_profile) {
-      target_profile = cmsCreate_sRGBProfile();
+    if (!targetProfile) {
+      targetProfile = cmsCreate_sRGBProfile();
     }
   }
 
@@ -133,10 +133,10 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     if (apply_cms) {
       std::vector<uint8_t> out_buffer(outRect.width * outRect.height * 4);
       decoder->decode(out_buffer.data(), outRect, inRect, rgb565, sampleSize,
-                      target_profile);
+                      targetProfile);
 
-      if (target_profile) {
-        cmsCloseProfile(target_profile);
+      if (targetProfile) {
+        cmsCloseProfile(targetProfile);
       }
 
       if (decoder->useTransform && decoder->transform) {
@@ -157,7 +157,7 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
       }
     } else {
       decoder->decode(pixels, outRect, inRect, rgb565, sampleSize,
-                      target_profile);
+                      targetProfile);
     }
   } catch (std::exception& ex) {
     LOGE("%s", ex.what());

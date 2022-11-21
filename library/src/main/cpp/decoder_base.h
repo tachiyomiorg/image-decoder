@@ -31,7 +31,7 @@ public:
 
   virtual void decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                       bool rgb565, uint32_t sampleSize,
-                      cmsHPROFILE target_profile) = 0;
+                      cmsHPROFILE targetProfile) = 0;
 
 protected:
   std::shared_ptr<Stream> stream;

@@ -25,7 +25,7 @@ class ImageDecoder private constructor(
     region: Rect = Rect(0, 0, width, height),
     rgb565: Boolean = true,
     sampleSize: Int = 1,
-    applyCMS: Boolean = false,
+    applyColorManagement: Boolean = false,
     displayProfile: ByteArray? = null,
   ): Bitmap? {
     checkValidInput(region, sampleSize)
@@ -36,7 +36,7 @@ class ImageDecoder private constructor(
       }
       nativeDecode(
         nativePtr, rgb565, sampleSize, region.left, region.top,
-        region.width(), region.height(), applyCMS, displayProfile
+        region.width(), region.height(), applyColorManagement, displayProfile
       )
     } finally {
       val currentDecoding = decoding.decrementAndGet()
@@ -92,8 +92,8 @@ class ImageDecoder private constructor(
     y: Int,
     width: Int,
     height: Int,
-    applyCms: Boolean,
-    displayProfile: ByteArray?
+    applyColorManagement: Boolean,
+    displayProfile: ByteArray?,
   ): Bitmap?
 
   private external fun nativeRecycle(nativePtr: Long)

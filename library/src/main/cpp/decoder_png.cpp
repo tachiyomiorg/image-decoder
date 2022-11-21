@@ -139,7 +139,7 @@ cmsHPROFILE PngDecoder::getColorProfile(png_struct* png, png_info* pinfo,
 
 void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                         bool rgb565, uint32_t sampleSize,
-                        cmsHPROFILE target_profile) {
+                        cmsHPROFILE targetProfile) {
   auto session = initDecodeSession();
   auto png = session->png;
   auto pinfo = session->pinfo;
@@ -153,7 +153,7 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     png_set_scale_16(png);
   }
 
-  if (target_profile) {
+  if (targetProfile) {
     cmsHPROFILE src_profile = getColorProfile(png, pinfo, colorType);
     if (src_profile) {
       uint32_t profileSpace = cmsGetColorSpace(src_profile);
@@ -178,7 +178,7 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
       }
 
       transform =
-          cmsCreateTransform(src_profile, inType, target_profile, TYPE_RGBA_8,
+          cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
                              cmsGetHeaderRenderingIntent(src_profile), 0);
 
       cmsCloseProfile(src_profile);

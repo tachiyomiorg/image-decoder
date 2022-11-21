@@ -138,11 +138,11 @@ ImageInfo JpegxlDecoder::parseInfo() {
 
 void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                            bool rgb565, uint32_t sampleSize,
-                           cmsHPROFILE target_profile) {
+                           cmsHPROFILE targetProfile) {
   decode();
 
   // Save transformed pixel data.
-  if (target_profile && mSrcProfile && !transformed) {
+  if (targetProfile && mSrcProfile && !transformed) {
     uint8_t* buf = pixels.data();
 
     cmsUInt32Number inType;
@@ -169,7 +169,7 @@ void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     }
 
     transform =
-        cmsCreateTransform(mSrcProfile, inType, target_profile, TYPE_RGBA_8,
+        cmsCreateTransform(mSrcProfile, inType, targetProfile, TYPE_RGBA_8,
                            cmsGetHeaderRenderingIntent(mSrcProfile), 0);
 
     cmsCloseProfile(mSrcProfile);

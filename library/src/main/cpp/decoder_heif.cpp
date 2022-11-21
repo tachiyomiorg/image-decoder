@@ -76,7 +76,7 @@ cmsHPROFILE HeifDecoder::getColorProfile(heif::ImageHandle handle) {
 
 void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
                          bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE target_profile) {
+                         cmsHPROFILE targetProfile) {
   // Decode full image (regions, subsamples or row by row are not supported
   // sadly)
   heif::Image img;
@@ -87,17 +87,15 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
 
     img =
         handle.decode_image(heif_colorspace_RGB, heif_chroma_interleaved_RGBA);
-
   } catch (heif::Error& error) {
     throw std::runtime_error(error.get_message());
   }
 
   int stride;
-  const uint8_t* inPixels = img.get_plane(heif_channel_interleaved, &stride);
-  uint8_t* pixels_buf = (uint8_t*)inPixels;
+  uint8_t* inPixels = img.get_plane(heif_channel_interleaved, &stride);
 
   std::vector<uint8_t> pixels;
-  if (target_profile) {
+  if (targetProfile) {
     cmsHPROFILE src_profile = getColorProfile(handle);
     cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
     useTransform = profileSpace == cmsSigRgbData;
@@ -112,7 +110,7 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     }
 
     transform =
-        cmsCreateTransform(src_profile, inType, target_profile, TYPE_RGBA_8,
+        cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
                            cmsGetHeaderRenderingIntent(src_profile), 0);
 
     cmsCloseProfile(src_profile);
@@ -124,8 +122,8 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
       if (inType == TYPE_GRAYA_8) {
         gray.resize(numPixels * 2);
         for (int i = 0; i < numPixels; i++) {
-          gray[i] = inPixels[i * 4];
-          gray[i + 1] = inPixels[i * 4 + 3];
+          gray[i * 2] = inPixels[i * 4];
+          gray[i * 2 + 1] = inPixels[i * 4 + 3];
         }
       } else {
         gray.resize(numPixels);
@@ -136,14 +134,14 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
 
       cmsDoTransform(transform, gray.data(), pixels.data(),
                      info.imageWidth * info.imageHeight);
-      pixels_buf = pixels.data();
+      inPixels = pixels.data();
     }
   }
 
   // Calculate stride of the decoded image with the requested region
   uint32_t inStride = stride;
   uint32_t inStrideOffset = inRect.x * (inStride / info.imageWidth);
-  auto inPixelsPos = pixels_buf + inStride * inRect.y;
+  auto inPixelsPos = inPixels + inStride * inRect.y;
 
   // Calculate output stride
   uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
