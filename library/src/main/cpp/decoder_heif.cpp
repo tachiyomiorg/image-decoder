@@ -80,13 +80,34 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   // Decode full image (regions, subsamples or row by row are not supported
   // sadly)
   heif::Image img;
-  heif::ImageHandle handle;
+  cmsUInt32Number inType;
   try {
     auto ctx = init_heif_context(stream.get());
-    handle = ctx.get_primary_image_handle();
+    auto handle = ctx.get_primary_image_handle();
 
-    img =
-        handle.decode_image(heif_colorspace_RGB, heif_chroma_interleaved_RGBA);
+    if (targetProfile) {
+      cmsHPROFILE src_profile = getColorProfile(handle);
+      cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+      useTransform = profileSpace == cmsSigRgbData;
+
+      if (useTransform) {
+        inType = TYPE_RGBA_8;
+      } else if (handle.has_alpha_channel()) {
+        inType = TYPE_GRAYA_8;
+      } else {
+        inType = TYPE_GRAY_8;
+      }
+
+      transform =
+          cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
+                             cmsGetHeaderRenderingIntent(src_profile), 0);
+
+      cmsCloseProfile(src_profile);
+    }
+
+    auto chroma = (!transform && rgb565) ? heif_chroma_interleaved_RGB
+                                         : heif_chroma_interleaved_RGBA;
+    img = handle.decode_image(heif_colorspace_RGB, chroma);
   } catch (heif::Error& error) {
     throw std::runtime_error(error.get_message());
   }
@@ -95,47 +116,28 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   uint8_t* inPixels = img.get_plane(heif_channel_interleaved, &stride);
 
   std::vector<uint8_t> pixels;
-  if (targetProfile) {
-    cmsHPROFILE src_profile = getColorProfile(handle);
-    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-    useTransform = profileSpace == cmsSigRgbData;
 
-    cmsUInt32Number inType;
-    if (useTransform) {
-      inType = TYPE_RGBA_8;
-    } else if (handle.has_alpha_channel()) {
-      inType = TYPE_GRAYA_8;
-    } else {
-      inType = TYPE_GRAY_8;
-    }
+  if (transform && !useTransform) {
+    uint32_t numPixels = info.imageWidth * info.imageHeight;
+    pixels.resize(numPixels * 4);
 
-    transform =
-        cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
-                           cmsGetHeaderRenderingIntent(src_profile), 0);
-
-    cmsCloseProfile(src_profile);
-    if (!useTransform) {
-      uint32_t numPixels = info.imageWidth * info.imageHeight;
-      pixels.resize(numPixels * 4);
-
-      std::vector<uint8_t> gray;
-      if (inType == TYPE_GRAYA_8) {
-        gray.resize(numPixels * 2);
-        for (int i = 0; i < numPixels; i++) {
-          gray[i * 2] = inPixels[i * 4];
-          gray[i * 2 + 1] = inPixels[i * 4 + 3];
-        }
-      } else {
-        gray.resize(numPixels);
-        for (int i = 0; i < numPixels; i++) {
-          gray[i] = inPixels[i * 4];
-        }
+    std::vector<uint8_t> gray;
+    if (inType == TYPE_GRAYA_8) {
+      gray.resize(numPixels * 2);
+      for (int i = 0; i < numPixels; i++) {
+        gray[i * 2] = inPixels[i * 4];
+        gray[i * 2 + 1] = inPixels[i * 4 + 3];
       }
-
-      cmsDoTransform(transform, gray.data(), pixels.data(),
-                     info.imageWidth * info.imageHeight);
-      inPixels = pixels.data();
+    } else {
+      gray.resize(numPixels);
+      for (int i = 0; i < numPixels; i++) {
+        gray[i] = inPixels[i * 4];
+      }
     }
+
+    cmsDoTransform(transform, gray.data(), pixels.data(),
+                   info.imageWidth * info.imageHeight);
+    inPixels = pixels.data();
   }
 
   // Calculate stride of the decoded image with the requested region
@@ -148,8 +150,8 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   uint8_t* outPixelsPos = outPixels;
 
   // Set row conversion function
-  auto rowFn = (transform || !rgb565) ? &RGBA8888_to_RGBA8888_row
-                                      : &RGBA8888_to_RGB565_row;
+  auto rowFn = (!transform && rgb565) ? &RGB888_to_RGB565_row
+                                      : &RGBA8888_to_RGBA8888_row;
 
   if (sampleSize == 1) {
     for (uint32_t i = 0; i < outRect.height; i++) {
