@@ -113,7 +113,7 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
 
   cmsHPROFILE targetProfile = nullptr;
   if (apply_cms) {
-    if (icm_stream != NULL) {
+    if (icm_stream) {
       int icm_stream_len = env->GetArrayLength(icm_stream);
       if (icm_stream_len > 0) {
         std::vector<uint8_t> icm_buf(icm_stream_len);
