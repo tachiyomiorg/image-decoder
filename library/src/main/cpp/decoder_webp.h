@@ -14,10 +14,11 @@ public:
   WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
   void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
-              uint32_t sampleSize);
+              uint32_t sampleSize, cmsHPROFILE targetProfile);
 
 private:
   ImageInfo parseInfo();
+  cmsHPROFILE getColorProfile();
 };
 
 #endif // IMAGEDECODER_DECODER_WEBP_H

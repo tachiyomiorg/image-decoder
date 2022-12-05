@@ -28,11 +28,12 @@ public:
   JpegDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
   void decode(uint8_t* outPixels, Rect outRect, Rect srcRegion, bool rgb565,
-              uint32_t sampleSize);
+              uint32_t sampleSize, cmsHPROFILE targetProfile);
 
 private:
   ImageInfo parseInfo();
   std::unique_ptr<JpegDecodeSession> initDecodeSession();
+  cmsHPROFILE getColorProfile(jpeg_decompress_struct* jinfo);
 };
 
 #endif // IMAGEDECODER_DECODER_JPEG_H

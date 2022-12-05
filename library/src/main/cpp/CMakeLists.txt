@@ -23,6 +23,8 @@ add_library(imagedecoder SHARED
 get_filename_component(deps "../_deps" REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 set(FETCHCONTENT_BASE_DIR ${deps})
 
+add_subdirectory(lcms)
+
 if(WITH_JPEG)
   add_subdirectory(libjpeg-turbo)
   add_definitions(-DHAVE_LIBJPEG)
@@ -48,6 +50,5 @@ if(WITH_JXL)
   add_definitions(-DHAVE_LIBJXL)
   target_sources(imagedecoder PRIVATE decoder_jxl.cpp)
 endif()
-
 
 target_link_libraries(imagedecoder android jnigraphics log)

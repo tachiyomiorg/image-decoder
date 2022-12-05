@@ -7,6 +7,8 @@
 
 #include "borders.h"
 #include "java_stream.h"
+#include <include/lcms2.h>
+#include <vector>
 
 struct ImageInfo {
   uint32_t imageWidth;
@@ -21,10 +23,15 @@ public:
     this->stream = std::move(stream);
     this->cropBorders = cropBorders;
   }
-  virtual ~BaseDecoder(){};
+  virtual ~BaseDecoder() {
+    if (transform) {
+      cmsDeleteTransform(transform);
+    }
+  };
 
   virtual void decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                      bool rgb565, uint32_t sampleSize) = 0;
+                      bool rgb565, uint32_t sampleSize,
+                      cmsHPROFILE targetProfile) = 0;
 
 protected:
   std::shared_ptr<Stream> stream;
@@ -32,6 +39,8 @@ protected:
 public:
   bool cropBorders;
   ImageInfo info;
+  cmsHTRANSFORM transform = nullptr;
+  bool useTransform = false;
 };
 
 #endif // IMAGEDECODER_DECODER_BASE_H

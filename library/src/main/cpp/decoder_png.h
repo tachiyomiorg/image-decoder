@@ -32,11 +32,13 @@ public:
   PngDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
   void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
-              uint32_t sampleSize);
+              uint32_t sampleSize, cmsHPROFILE targetProfile);
 
 private:
   ImageInfo parseInfo();
   std::unique_ptr<PngDecodeSession> initDecodeSession();
+  cmsHPROFILE getColorProfile(png_struct* png, png_info* pinfo,
+                              uint8_t colorType);
 };
 
 #endif // IMAGEDECODER_DECODER_PNG_H
