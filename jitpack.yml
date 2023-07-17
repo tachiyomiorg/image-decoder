@@ -1,6 +1,4 @@
-jdk:
-  - openjdk17
 before_install:
   - mkdir -p $ANDROID_HOME/cmake
-  - wget -q -O- https://share.kanade.eu/cmake-3.22.1.tar.gz | tar -xz -C $ANDROID_HOME/cmake
+  - wget -q -O- https://cmake.org/files/v3.22/cmake-3.22.1.tar.gz | tar -xz -C $ANDROID_HOME/cmake
   - yes | $ANDROID_HOME/tools/bin/sdkmanager "cmake;3.22.1" "ndk;25.1.8937393"
