@@ -1,2 +1,4 @@
+jdk:
+  - openjdk17
 before_install:
   - yes | $ANDROID_HOME/tools/bin/sdkmanager "cmake;3.22.1" "ndk;25.1.8937393"
