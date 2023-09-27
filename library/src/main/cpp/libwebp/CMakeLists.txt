@@ -1,6 +1,6 @@
 FetchContent_Declare(libwebp
   GIT_REPOSITORY  https://chromium.googlesource.com/webm/libwebp
-  GIT_TAG         v1.1.0
+  GIT_TAG         v1.3.2
   BINARY_DIR      build
   SUBBUILD_DIR    subbuild
 )
