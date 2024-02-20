@@ -8,7 +8,7 @@ group = 'tachiyomiorg'
 
 android {
     compileSdkVersion 33
-    ndkVersion "25.1.8937393"
+    ndkVersion "26.2.11394342"
 
     defaultConfig {
         minSdkVersion 21

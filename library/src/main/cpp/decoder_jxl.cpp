@@ -65,16 +65,15 @@ void JpegxlDecoder::decode() {
     } else if (status == JXL_DEC_COLOR_ENCODING) {
       size_t size = 0;
       if (JXL_DEC_SUCCESS !=
-          JxlDecoderGetICCProfileSize(dec.get(), &format,
-                                      JXL_COLOR_PROFILE_TARGET_DATA, &size)) {
+          JxlDecoderGetICCProfileSize(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
+                                      &size)) {
         throw std::runtime_error("JxlDecoderGetICCProfileSize failed");
       }
 
       std::vector<uint8_t> icc_profile(size);
-      if (JXL_DEC_SUCCESS !=
-          JxlDecoderGetColorAsICCProfile(dec.get(), &format,
-                                         JXL_COLOR_PROFILE_TARGET_DATA,
-                                         icc_profile.data(), size)) {
+      if (JXL_DEC_SUCCESS != JxlDecoderGetColorAsICCProfile(
+                                 dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
+                                 icc_profile.data(), size)) {
         throw std::runtime_error("JxlDecoderGetColorAsICCProfile failed");
       }
 
