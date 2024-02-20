@@ -1,6 +1,6 @@
 FetchContent_Declare(lcms2
   GIT_REPOSITORY  https://github.com/mm2/Little-CMS
-  GIT_TAG         lcms2.12
+  GIT_TAG         lcms2.16
   PATCH_COMMAND   git apply ${CMAKE_CURRENT_LIST_DIR}/lcms2.12.patch || true
   BINARY_DIR      build
   SUBBUILD_DIR    subbuild
