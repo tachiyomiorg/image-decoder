@@ -81,8 +81,7 @@ cmsHPROFILE HeifDecoder::getColorProfile(heif::ImageHandle handle) {
 }
 
 void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE targetProfile) {
+                         uint32_t sampleSize, cmsHPROFILE targetProfile) {
   // Decode full image (regions, subsamples or row by row are not supported
   // sadly)
   heif::Image img;
@@ -91,29 +90,30 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     auto ctx = init_heif_context(stream.get());
     auto handle = ctx.get_primary_image_handle();
 
-    if (targetProfile) {
-      cmsHPROFILE src_profile = getColorProfile(handle);
-      cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-      useTransform = profileSpace == cmsSigRgbData;
-
-      if (useTransform) {
-        inType = TYPE_RGBA_8;
-      } else if (handle.has_alpha_channel()) {
-        inType = TYPE_GRAYA_8;
-      } else {
-        inType = TYPE_GRAY_8;
-      }
-
-      transform =
-          cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
-                             cmsGetHeaderRenderingIntent(src_profile), 0);
-
-      cmsCloseProfile(src_profile);
+    cmsHPROFILE src_profile = getColorProfile(handle);
+    if (!src_profile) {
+      src_profile = cmsCreate_sRGBProfile(); // assume sRGB
     }
 
-    auto chroma = (!transform && rgb565) ? heif_chroma_interleaved_RGB
-                                         : heif_chroma_interleaved_RGBA;
-    img = handle.decode_image(heif_colorspace_RGB, chroma);
+    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+    useTransform = profileSpace == cmsSigRgbData;
+
+    if (useTransform) {
+      inType = TYPE_RGBA_8;
+    } else if (handle.has_alpha_channel()) {
+      inType = TYPE_GRAYA_8;
+    } else {
+      inType = TYPE_GRAY_8;
+    }
+
+    transform =
+        cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
+                           cmsGetHeaderRenderingIntent(src_profile), 0);
+
+    cmsCloseProfile(src_profile);
+
+    img =
+        handle.decode_image(heif_colorspace_RGB, heif_chroma_interleaved_RGBA);
   } catch (heif::Error& error) {
     throw std::runtime_error(error.get_message());
   }
@@ -123,7 +123,7 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
 
   std::vector<uint8_t> pixels;
 
-  if (transform && !useTransform) {
+  if (!useTransform) {
     uint32_t numPixels = info.imageWidth * info.imageHeight;
     pixels.resize(numPixels * 4);
 
@@ -152,12 +152,11 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   auto inPixelsPos = inPixels + inStride * inRect.y;
 
   // Calculate output stride
-  uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
+  uint32_t outStride = outRect.width * 4;
   uint8_t* outPixelsPos = outPixels;
 
   // Set row conversion function
-  auto rowFn = (!transform && rgb565) ? &RGB888_to_RGB565_row
-                                      : &RGBA8888_to_RGBA8888_row;
+  auto rowFn = &RGBA8888_to_RGBA8888_row;
 
   if (sampleSize == 1) {
     for (uint32_t i = 0; i < outRect.height; i++) {

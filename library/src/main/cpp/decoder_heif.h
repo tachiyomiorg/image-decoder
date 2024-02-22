@@ -15,7 +15,7 @@ class HeifDecoder : public BaseDecoder {
 public:
   HeifDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
 
-  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
+  void decode(uint8_t* outPixels, Rect outRect, Rect inRect,
               uint32_t sampleSize, cmsHPROFILE targetProfile);
 
 private:

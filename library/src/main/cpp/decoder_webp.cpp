@@ -82,24 +82,23 @@ cmsHPROFILE WebpDecoder::getColorProfile() {
 }
 
 void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE targetProfile) {
+                         uint32_t sampleSize, cmsHPROFILE targetProfile) {
   WebPDecoderConfig config;
   WebPInitDecoderConfig(&config);
 
-  if (targetProfile) {
-    cmsHPROFILE src_profile = getColorProfile();
-    if (src_profile) {
-      cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-      useTransform = true;
-
-      transform = cmsCreateTransform(
-          src_profile, TYPE_RGBA_8, targetProfile, TYPE_RGBA_8,
-          cmsGetHeaderRenderingIntent(src_profile), 0);
-
-      cmsCloseProfile(src_profile);
-    }
+  cmsHPROFILE src_profile = getColorProfile();
+  if (!src_profile) {
+    src_profile = cmsCreate_sRGBProfile();
   }
+
+  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+  useTransform = true;
+
+  transform =
+      cmsCreateTransform(src_profile, TYPE_RGBA_8, targetProfile, TYPE_RGBA_8,
+                         cmsGetHeaderRenderingIntent(src_profile), 0);
+
+  cmsCloseProfile(src_profile);
 
   // Set decode region
   config.options.use_cropping =
@@ -115,8 +114,8 @@ void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   config.options.scaled_height = outRect.height;
 
   // Set colorspace and stride params
-  uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
-  config.output.colorspace = (!transform && rgb565) ? MODE_RGB_565 : MODE_RGBA;
+  uint32_t outStride = outRect.width * 4;
+  config.output.colorspace = MODE_RGBA;
   config.output.u.RGBA.rgba = outPixels;
   config.output.u.RGBA.size = outStride * outRect.height;
   config.output.u.RGBA.stride = outStride;

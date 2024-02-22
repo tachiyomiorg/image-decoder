@@ -23,9 +23,7 @@ class ImageDecoder private constructor(
 
   fun decode(
     region: Rect = Rect(0, 0, width, height),
-    rgb565: Boolean = true,
     sampleSize: Int = 1,
-    applyColorManagement: Boolean = false,
     displayProfile: ByteArray? = null,
   ): Bitmap? {
     checkValidInput(region, sampleSize)
@@ -35,8 +33,8 @@ class ImageDecoder private constructor(
         require(!isRecycled) { "The decoder has been recycled" }
       }
       nativeDecode(
-        nativePtr, rgb565, sampleSize, region.left, region.top,
-        region.width(), region.height(), applyColorManagement, displayProfile
+        nativePtr, sampleSize, region.left, region.top, region.width(),
+        region.height(), displayProfile
       )
     } finally {
       val currentDecoding = decoding.decrementAndGet()
@@ -86,13 +84,11 @@ class ImageDecoder private constructor(
 
   private external fun nativeDecode(
     nativePtr: Long,
-    rgb565: Boolean,
     sampleSize: Int,
     x: Int,
     y: Int,
     width: Int,
     height: Int,
-    applyColorManagement: Boolean,
     displayProfile: ByteArray?,
   ): Bitmap?
 
@@ -124,10 +120,9 @@ class ImageDecoder private constructor(
     private external fun nativeFindType(bytes: ByteArray): ImageType?
 
     @JvmStatic
-    private fun createBitmap(width: Int, height: Int, rgb565: Boolean): Bitmap? {
+    private fun createBitmap(width: Int, height: Int): Bitmap? {
       return try {
-        val config = if (rgb565) Bitmap.Config.RGB_565 else Bitmap.Config.ARGB_8888
-        Bitmap.createBitmap(width, height, config)
+        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
       } catch (e: OutOfMemoryError) {
         null
       }

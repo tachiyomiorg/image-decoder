@@ -95,42 +95,37 @@ cmsHPROFILE JpegDecoder::getColorProfile(jpeg_decompress_struct* jinfo) {
 }
 
 void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE targetProfile) {
+                         uint32_t sampleSize, cmsHPROFILE targetProfile) {
   auto session = initDecodeSession();
   auto* jinfo = &session->jinfo;
 
-  if (targetProfile) {
-    cmsHPROFILE src_profile = getColorProfile(jinfo);
-    if (src_profile) {
-      cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-      useTransform = profileSpace == cmsSigRgbData;
-
-      cmsUInt32Number inType;
-      if (useTransform) {
-        inType = TYPE_RGBA_8;
-      } else {
-        inType = TYPE_GRAY_8;
-      }
-
-      transform =
-          cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
-                             cmsGetHeaderRenderingIntent(src_profile), 0);
-
-      cmsCloseProfile(src_profile);
-
-      jinfo->out_color_space =
-          inType == TYPE_GRAY_8 ? JCS_GRAYSCALE : JCS_EXT_RGBA;
-    }
+  cmsHPROFILE src_profile = getColorProfile(jinfo);
+  if (!src_profile) {
+    src_profile = cmsCreate_sRGBProfile(); // assume sRGB
   }
 
-  if (!transform) {
-    // Set output color space.
-    jinfo->out_color_space = rgb565 ? JCS_RGB565 : JCS_EXT_RGBA;
-    if (rgb565) {
-      jinfo->dither_mode = JDITHER_NONE;
-    }
+  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+  useTransform =
+      profileSpace == cmsSigRgbData || profileSpace == cmsSigCmykData;
+
+  cmsUInt32Number inType;
+  if (profileSpace == cmsSigGrayData) {
+    inType = TYPE_GRAY_8;
+  } else if (profileSpace == cmsSigCmykData) {
+    inType = TYPE_CMYK_8;
+  } else {
+    inType = TYPE_RGBA_8;
   }
+
+  transform =
+      cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
+                         cmsGetHeaderRenderingIntent(src_profile), 0);
+
+  cmsCloseProfile(src_profile);
+
+  jinfo->out_color_space = inType == TYPE_GRAY_8   ? JCS_GRAYSCALE
+                           : inType == TYPE_CMYK_8 ? JCS_CMYK
+                                                   : JCS_EXT_RGBA;
 
   // 8 is the maximum supported scale by libjpeg, so we'll use custom logic for
   // further samples.
@@ -149,9 +144,7 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   jpeg_skip_scanlines(jinfo, decRect.y);
 
   // Now that we know the decoding width, we can calculate the row stride.
-  uint32_t inPixelSize = jinfo->out_color_space == JCS_GRAYSCALE ? 1
-                         : jinfo->out_color_space == JCS_RGB565  ? 2
-                                                                 : 4;
+  uint32_t inPixelSize = jinfo->out_color_space == JCS_GRAYSCALE ? 1 : 4;
   uint32_t inStride = decWidth * inPixelSize;
   uint32_t inStartStride = (decRect.x - decX) * inPixelSize;
 
@@ -162,7 +155,7 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   uint8_t* inRowPtrAligned = inRowPtr + inStartStride;
 
   // Save a pointer to the output image and calculate the output stride.
-  uint32_t outPixelSize = (!transform && rgb565) ? 2 : 4;
+  uint32_t outPixelSize = 4;
   uint8_t* outPixelsPos = outPixels;
   uint32_t outStride = outRect.width * outPixelSize;
 
@@ -205,8 +198,7 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     uint32_t skipStart = (customSample - 2) / 2;
     uint32_t skipEnd = customSample - 2 - skipStart;
 
-    auto rowFn = (transform || !rgb565) ? &RGBA8888_to_RGBA8888_row
-                                        : &RGB565_to_RGB565_row;
+    auto rowFn = &RGBA8888_to_RGBA8888_row;
 
     for (uint32_t i = 0; i < outRect.height; i++) {
       jpeg_skip_scanlines(jinfo, skipStart);

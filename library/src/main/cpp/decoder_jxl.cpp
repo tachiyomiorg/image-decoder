@@ -136,12 +136,11 @@ ImageInfo JpegxlDecoder::parseInfo() {
 }
 
 void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                           bool rgb565, uint32_t sampleSize,
-                           cmsHPROFILE targetProfile) {
+                           uint32_t sampleSize, cmsHPROFILE targetProfile) {
   decode();
 
   // Save transformed pixel data.
-  if (targetProfile && mSrcProfile && !transformed) {
+  if (!transformed) {
     uint8_t* buf = pixels.data();
 
     cmsUInt32Number inType;
@@ -167,6 +166,10 @@ void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
       buf = gray.data();
     }
 
+    if (!mSrcProfile) {
+      mSrcProfile = cmsCreate_sRGBProfile(); // assume sRGB, should never happen
+    }
+
     transform =
         cmsCreateTransform(mSrcProfile, inType, targetProfile, TYPE_RGBA_8,
                            cmsGetHeaderRenderingIntent(mSrcProfile), 0);
@@ -187,11 +190,11 @@ void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   auto inPixelsPos = (uint8_t*)pixels.data() + inStride * inRect.y;
 
   // Calculate output stride
-  uint32_t outStride = outRect.width * (rgb565 ? 2 : 4);
+  uint32_t outStride = outRect.width * 4;
   uint8_t* outPixelsPos = outPixels;
 
   // Set row conversion function
-  auto rowFn = rgb565 ? &RGBA8888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
+  auto rowFn = &RGBA8888_to_RGBA8888_row;
 
   if (sampleSize == 1) {
     for (uint32_t i = 0; i < outRect.height; i++) {

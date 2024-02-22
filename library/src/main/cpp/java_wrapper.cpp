@@ -77,9 +77,8 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(JNIEnv* env, jclass,
 
 extern "C" JNIEXPORT jobject JNICALL
 Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
-    JNIEnv* env, jobject, jlong decoderPtr, jboolean rgb565, jint sampleSize,
-    jint x, jint y, jint width, jint height, jboolean apply_cms,
-    jbyteArray icm_stream) {
+    JNIEnv* env, jobject, jlong decoderPtr, jint sampleSize, jint x, jint y,
+    jint width, jint height, jbyteArray icm_stream) {
   auto* decoder = (BaseDecoder*)decoderPtr;
 
   // Bounds of the image when crop borders is enabled, otherwise it matches the
@@ -97,10 +96,10 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     return nullptr;
   }
 
-  auto* bitmap = create_bitmap(env, outRect.width, outRect.height, rgb565);
+  auto* bitmap = create_bitmap(env, outRect.width, outRect.height);
   if (!bitmap) {
     LOGE("Failed to create a bitmap of size %dx%dx%d", outRect.width,
-         outRect.height, rgb565 ? 2 : 4);
+         outRect.height, 4);
     return nullptr;
   }
 
@@ -112,53 +111,38 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
   }
 
   cmsHPROFILE targetProfile = nullptr;
-  if (apply_cms) {
-    if (icm_stream) {
-      int icm_stream_len = env->GetArrayLength(icm_stream);
-      if (icm_stream_len > 0) {
-        std::vector<uint8_t> icm_buf(icm_stream_len);
-        env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
-                                reinterpret_cast<jbyte*>(icm_buf.data()));
+  if (icm_stream) {
+    int icm_stream_len = env->GetArrayLength(icm_stream);
+    if (icm_stream_len > 0) {
+      std::vector<uint8_t> icm_buf(icm_stream_len);
+      env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
+                              reinterpret_cast<jbyte*>(icm_buf.data()));
 
-        targetProfile = cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
-      }
-    }
-
-    if (!targetProfile) {
-      targetProfile = cmsCreate_sRGBProfile();
+      targetProfile = cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
     }
   }
 
+  if (!targetProfile) {
+    targetProfile = cmsCreate_sRGBProfile();
+  }
+
   try {
-    if (apply_cms) {
-      std::vector<uint8_t> out_buffer(outRect.width * outRect.height * 4);
-      decoder->decode(out_buffer.data(), outRect, inRect, rgb565, sampleSize,
-                      targetProfile);
+    std::vector<uint8_t> out_buffer(outRect.width * outRect.height * 4);
+    decoder->decode(out_buffer.data(), outRect, inRect, sampleSize,
+                    targetProfile);
 
-      if (targetProfile) {
-        cmsCloseProfile(targetProfile);
-      }
-
-      if (decoder->useTransform && decoder->transform) {
-        cmsDoTransform(decoder->transform, out_buffer.data(), out_buffer.data(),
-                       outRect.width * outRect.height);
-      }
-
-      // If any transform has been done, it should be output as rgba.
-      if (decoder->transform && rgb565) {
-        RGBA8888_to_RGB565_row(pixels, out_buffer.data(), nullptr,
-                               outRect.width * outRect.height, 1);
-      } else if (rgb565) {
-        RGB565_to_RGB565_row(pixels, out_buffer.data(), nullptr,
-                             outRect.width * outRect.height, 1);
-      } else {
-        RGBA8888_to_RGBA8888_row(pixels, out_buffer.data(), nullptr,
-                                 outRect.width * outRect.height, 1);
-      }
-    } else {
-      decoder->decode(pixels, outRect, inRect, rgb565, sampleSize,
-                      targetProfile);
+    if (targetProfile) {
+      cmsCloseProfile(targetProfile);
     }
+
+    if (decoder->useTransform && decoder->transform) {
+      cmsDoTransform(decoder->transform, out_buffer.data(), out_buffer.data(),
+                     outRect.width * outRect.height);
+    }
+
+    // out_buffer must be rgba.
+    RGBA8888_to_RGBA8888_row(pixels, out_buffer.data(), nullptr,
+                             outRect.width * outRect.height, 1);
   } catch (std::exception& ex) {
     LOGE("%s", ex.what());
     AndroidBitmap_unlockPixels(env, bitmap);

@@ -138,8 +138,7 @@ cmsHPROFILE PngDecoder::getColorProfile(png_struct* png, png_info* pinfo,
 }
 
 void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                        bool rgb565, uint32_t sampleSize,
-                        cmsHPROFILE targetProfile) {
+                        uint32_t sampleSize, cmsHPROFILE targetProfile) {
   auto session = initDecodeSession();
   auto png = session->png;
   auto pinfo = session->pinfo;
@@ -153,39 +152,15 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     png_set_scale_16(png);
   }
 
-  if (targetProfile) {
-    cmsHPROFILE src_profile = getColorProfile(png, pinfo, colorType);
-    if (src_profile) {
-      uint32_t profileSpace = cmsGetColorSpace(src_profile);
-      useTransform = profileSpace == cmsSigRgbData;
-
-      cmsUInt32Number inType;
-      if (useTransform) {
-        if (colorType == PNG_COLOR_TYPE_GRAY ||
-            colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
-          png_set_gray_to_rgb(png);
-        }
-        if (!(colorType & PNG_COLOR_MASK_ALPHA)) {
-          png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
-        }
-        inType = TYPE_RGBA_8;
-      } else {
-        if (colorType & PNG_COLOR_MASK_ALPHA) {
-          inType = TYPE_GRAYA_8;
-        } else {
-          inType = TYPE_GRAY_8;
-        }
-      }
-
-      transform =
-          cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
-                             cmsGetHeaderRenderingIntent(src_profile), 0);
-
-      cmsCloseProfile(src_profile);
-    }
+  cmsHPROFILE src_profile = getColorProfile(png, pinfo, colorType);
+  if (!src_profile) {
+    src_profile = cmsCreate_sRGBProfile();
   }
+  uint32_t profileSpace = cmsGetColorSpace(src_profile);
+  useTransform = profileSpace == cmsSigRgbData;
 
-  if (!transform) {
+  cmsUInt32Number inType;
+  if (useTransform) {
     if (colorType == PNG_COLOR_TYPE_GRAY ||
         colorType == PNG_COLOR_TYPE_GRAY_ALPHA) {
       png_set_gray_to_rgb(png);
@@ -193,7 +168,20 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
     if (!(colorType & PNG_COLOR_MASK_ALPHA)) {
       png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
     }
+    inType = TYPE_RGBA_8;
+  } else {
+    if (colorType & PNG_COLOR_MASK_ALPHA) {
+      inType = TYPE_GRAYA_8;
+    } else {
+      inType = TYPE_GRAY_8;
+    }
   }
+
+  transform =
+      cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
+                         cmsGetHeaderRenderingIntent(src_profile), 0);
+
+  cmsCloseProfile(src_profile);
 
   int32_t passes = png_set_interlace_handling(png);
 
@@ -203,11 +191,10 @@ void PngDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   uint32_t inStride = info.imageWidth * inComponents;
   uint32_t inStrideOffset = inRect.x * inComponents;
 
-  uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
+  uint32_t outStride = outRect.width * 4;
   uint8_t* outPixelsPos = outPixels;
 
-  auto rowFn = (transform || !rgb565) ? &RGBA8888_to_RGBA8888_row
-                                      : &RGBA8888_to_RGB565_row;
+  auto rowFn = &RGBA8888_to_RGBA8888_row;
 
   std::vector<uint8_t> CMSLine;
   if (sampleSize == 1) {
