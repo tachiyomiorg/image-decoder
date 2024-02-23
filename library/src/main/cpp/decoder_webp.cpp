@@ -4,8 +4,9 @@
 
 #include "decoder_webp.h"
 
-WebpDecoder::WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
-    : BaseDecoder(std::move(stream), cropBorders) {
+WebpDecoder::WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+                         cmsHPROFILE targetProfile)
+    : BaseDecoder(std::move(stream), cropBorders, targetProfile) {
   this->info = parseInfo();
 }
 
@@ -48,55 +49,53 @@ cmsHPROFILE WebpDecoder::getColorProfile() {
   WebPData data = {.bytes = stream->bytes, .size = stream->size};
   WebPDemuxer* const demux = WebPDemux(&data);
 
-  if (demux != NULL) {
-    uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
-    WebPChunkIterator chunk_iter;
-    cmsHPROFILE src_profile;
-    if ((flags & ICCP_FLAG) &&
-        WebPDemuxGetChunk(demux, "ICCP", 1, &chunk_iter)) {
+  if (!demux) {
+    return nullptr;
+  }
 
-      src_profile =
-          cmsOpenProfileFromMem(chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+  uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
+  WebPChunkIterator chunk_iter;
+  cmsHPROFILE src_profile;
 
-      WebPDemuxReleaseChunkIterator(&chunk_iter);
-    }
+  if ((flags & ICCP_FLAG) && WebPDemuxGetChunk(demux, "ICCP", 1, &chunk_iter)) {
+    src_profile =
+        cmsOpenProfileFromMem(chunk_iter.chunk.bytes, chunk_iter.chunk.size);
 
-    WebPDemuxDelete(demux);
+    WebPDemuxReleaseChunkIterator(&chunk_iter);
+  }
 
-    if (!src_profile) {
-      return cmsCreate_sRGBProfile();
-    }
+  WebPDemuxDelete(demux);
 
-    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-
-    // WebP doesn't support gray-scale.
-    if (profileSpace != cmsSigRgbData) {
-      cmsCloseProfile(src_profile);
-      return nullptr;
-    }
-
-    return src_profile;
-  } else {
+  if (!src_profile) {
     return cmsCreate_sRGBProfile();
   }
+
+  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+
+  // WebP doesn't support gray-scale.
+  if (profileSpace != cmsSigRgbData) {
+    cmsCloseProfile(src_profile);
+    return cmsCreate_sRGBProfile();
+  }
+
+  return cmsCreate_sRGBProfile();
 }
 
 void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         uint32_t sampleSize, cmsHPROFILE targetProfile) {
+                         uint32_t sampleSize) {
   WebPDecoderConfig config;
   WebPInitDecoderConfig(&config);
 
   cmsHPROFILE src_profile = getColorProfile();
-  if (!src_profile) {
-    src_profile = cmsCreate_sRGBProfile();
-  }
 
   cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
   useTransform = true;
 
-  transform =
-      cmsCreateTransform(src_profile, TYPE_RGBA_8, targetProfile, TYPE_RGBA_8,
-                         cmsGetHeaderRenderingIntent(src_profile), 0);
+  inType = TYPE_RGBA_8;
+
+  transform = cmsCreateTransform(
+      src_profile, inType, targetProfile, TYPE_RGBA_8,
+      cmsGetHeaderRenderingIntent(src_profile), cmsFLAGS_COPY_ALPHA);
 
   cmsCloseProfile(src_profile);
 

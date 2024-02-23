@@ -3,11 +3,15 @@
 //
 
 #include "decoder_jpeg.h"
+#include "cmyk.h"
+#include "log.h"
 #include "row_convert.h"
 #include <algorithm>
+#include <iostream>
 
-JpegDecoder::JpegDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
-    : BaseDecoder(std::move(stream), cropBorders) {
+JpegDecoder::JpegDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+                         cmsHPROFILE targetProfile)
+    : BaseDecoder(std::move(stream), cropBorders, targetProfile) {
   this->info = parseInfo();
 }
 
@@ -46,18 +50,18 @@ ImageInfo JpegDecoder::parseInfo() {
   Rect bounds = {.x = 0, .y = 0, .width = imageWidth, .height = imageHeight};
   if (cropBorders) {
     try {
-      auto pixels = std::make_unique<uint8_t[]>(imageWidth * imageHeight);
+      auto pixels = std::vector<uint8_t>(imageWidth * imageHeight);
 
       jinfo.out_color_space = JCS_GRAYSCALE;
       jpeg_start_decompress(&jinfo);
 
-      uint8_t* pixelsPtr = pixels.get();
+      uint8_t* pixelsPtr = pixels.data();
       while (jinfo.output_scanline < jinfo.output_height) {
         uint8_t* offset = pixelsPtr + jinfo.output_scanline * imageWidth;
         jpeg_read_scanlines(&jinfo, &offset, 1);
       }
       jpeg_finish_decompress(&jinfo);
-      bounds = findBorders(pixels.get(), imageWidth, imageHeight);
+      bounds = findBorders(pixels.data(), imageWidth, imageHeight);
     } catch (std::exception& ex) {
       LOGW("Couldn't crop borders on a JPEG image of size %dx%d", imageWidth,
            imageHeight);
@@ -75,57 +79,71 @@ ImageInfo JpegDecoder::parseInfo() {
 cmsHPROFILE JpegDecoder::getColorProfile(jpeg_decompress_struct* jinfo) {
   JOCTET* icc_data;
   unsigned int icc_size;
-  if (jpeg_read_icc_profile(jinfo, &icc_data, &icc_size)) {
-    cmsHPROFILE src_profile = cmsOpenProfileFromMem(icc_data, icc_size);
-    free(icc_data);
-
-    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-
-    if (profileSpace != cmsSigRgbData &&
-        (jinfo->jpeg_color_space != JCS_GRAYSCALE ||
-         profileSpace != cmsSigGrayData)) {
-      cmsCloseProfile(src_profile);
-      return nullptr;
-    }
-
-    return src_profile;
-  } else {
-    return cmsCreate_sRGBProfile();
+  if (!jpeg_read_icc_profile(jinfo, &icc_data, &icc_size)) {
+    return nullptr;
   }
+  cmsHPROFILE src_profile = cmsOpenProfileFromMem(icc_data, icc_size);
+  free(icc_data);
+
+  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+
+  auto colorspace = jinfo->jpeg_color_space;
+
+  if ((colorspace == JCS_GRAYSCALE && profileSpace != cmsSigGrayData) ||
+      (colorspace == JCS_CMYK && profileSpace != cmsSigCmykData) ||
+      (colorspace == JCS_YCCK && profileSpace != cmsSigCmykData) ||
+      (colorspace == JCS_RGB && profileSpace != cmsSigRgbData) ||
+      (colorspace == JCS_YCbCr && profileSpace != cmsSigRgbData)) {
+    cmsCloseProfile(src_profile);
+    return nullptr;
+  }
+
+  return src_profile;
 }
 
 void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         uint32_t sampleSize, cmsHPROFILE targetProfile) {
+                         uint32_t sampleSize) {
   auto session = initDecodeSession();
   auto* jinfo = &session->jinfo;
 
-  cmsHPROFILE src_profile = getColorProfile(jinfo);
-  if (!src_profile) {
-    src_profile = cmsCreate_sRGBProfile(); // assume sRGB
-  }
-
-  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-  useTransform =
-      profileSpace == cmsSigRgbData || profileSpace == cmsSigCmykData;
-
-  cmsUInt32Number inType;
-  if (profileSpace == cmsSigGrayData) {
-    inType = TYPE_GRAY_8;
-  } else if (profileSpace == cmsSigCmykData) {
+  if (jinfo->jpeg_color_space == JCS_CMYK ||
+      jinfo->jpeg_color_space == JCS_YCCK) {
+    // libjpeg can convert YCCK to CMYK
     inType = TYPE_CMYK_8;
+  } else if (jinfo->jpeg_color_space == JCS_GRAYSCALE) {
+    inType = TYPE_GRAY_8;
   } else {
     inType = TYPE_RGBA_8;
   }
 
+  cmsHPROFILE src_profile = getColorProfile(jinfo);
+  if (!src_profile) {
+    if (inType == TYPE_CMYK_8) {
+      src_profile = cmsOpenProfileFromMem(CMYK_USWebCoatedSWOP_icc,
+                                          CMYK_USWebCoatedSWOP_icc_len);
+    } else {
+      inType = TYPE_RGBA_8;
+      src_profile = cmsCreate_sRGBProfile();
+    }
+  }
+
+  if (inType == TYPE_CMYK_8 && jinfo->saw_Adobe_marker) {
+    inType = TYPE_CMYK_8_REV;
+  }
+
+  useTransform = true;
+
   transform =
       cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
-                         cmsGetHeaderRenderingIntent(src_profile), 0);
+                         cmsGetHeaderRenderingIntent(src_profile),
+                         inType == TYPE_RGBA_8 ? cmsFLAGS_COPY_ALPHA : 0);
 
   cmsCloseProfile(src_profile);
 
-  jinfo->out_color_space = inType == TYPE_GRAY_8   ? JCS_GRAYSCALE
-                           : inType == TYPE_CMYK_8 ? JCS_CMYK
-                                                   : JCS_EXT_RGBA;
+  jinfo->out_color_space = inType == TYPE_GRAY_8       ? JCS_GRAYSCALE
+                           : inType == TYPE_CMYK_8     ? JCS_CMYK
+                           : inType == TYPE_CMYK_8_REV ? JCS_CMYK
+                                                       : JCS_EXT_RGBA;
 
   // 8 is the maximum supported scale by libjpeg, so we'll use custom logic for
   // further samples.
@@ -144,61 +162,44 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   jpeg_skip_scanlines(jinfo, decRect.y);
 
   // Now that we know the decoding width, we can calculate the row stride.
-  uint32_t inPixelSize = jinfo->out_color_space == JCS_GRAYSCALE ? 1 : 4;
-  uint32_t inStride = decWidth * inPixelSize;
-  uint32_t inStartStride = (decRect.x - decX) * inPixelSize;
+  uint32_t inComponents = jinfo->out_color_space == JCS_GRAYSCALE ? 1 : 4;
+  uint32_t inStride = decWidth * inComponents;
+  uint32_t inStrideOffset = (decRect.x - decX) * inComponents;
 
   // Allocate row and get pointers to the row and the row aligned for output
   // image.
-  auto inRow = std::make_unique<uint8_t[]>(inStride);
-  uint8_t* inRowPtr = inRow.get();
-  uint8_t* inRowPtrAligned = inRowPtr + inStartStride;
+  auto inRow = std::vector<uint8_t>(inStride);
+  uint8_t* inRowPtr = inRow.data();
+  uint8_t* inRowPtrAligned = inRowPtr + inStrideOffset;
 
   // Save a pointer to the output image and calculate the output stride.
-  uint32_t outPixelSize = 4;
   uint8_t* outPixelsPos = outPixels;
-  uint32_t outStride = outRect.width * outPixelSize;
+  uint32_t outStride = outRect.width * inComponents;
 
   if (customSample == 0) {
-    std::vector<uint8_t> CMSLine;
-    if (!useTransform && transform) {
-      CMSLine.resize(outStride);
-    }
-
     // No custom sampler needed, just decode and copy to destination.
     for (uint32_t i = 0; i < outRect.height; i++) {
       jpeg_read_scanlines(jinfo, &inRowPtr, 1);
 
-      auto rowToWrite = inRowPtrAligned;
+      memcpy(outPixelsPos, inRowPtrAligned, outStride);
 
-      if (!useTransform && transform) {
-        cmsDoTransform(transform, rowToWrite, CMSLine.data(), outRect.width);
-        rowToWrite = CMSLine.data();
-      }
-
-      memcpy(outPixelsPos, rowToWrite, outStride);
       outPixelsPos += outStride;
     }
   } else {
-    std::vector<uint8_t> CMSLine1;
-    std::vector<uint8_t> CMSLine2;
-    if (!useTransform && transform) {
-      CMSLine1.resize(4 * outRect.width);
-      CMSLine2.resize(4 * outRect.width);
-    }
-
     // Custom sampler needed, we need to decode two rows and downsample them.
     // Allocate second row and get pointers to the row and the row aligned for
     // output image.
-    auto inRow2 = std::make_unique<uint8_t[]>(inStride);
-    uint8_t* inRow2Ptr = inRow2.get();
-    uint8_t* inRow2PtrAligned = inRow2Ptr + inStartStride;
+    auto inRow2 = std::vector<uint8_t>(inStride);
+    uint8_t* inRow2Ptr = inRow2.data();
+    uint8_t* inRow2PtrAligned = inRow2Ptr + inStrideOffset;
 
     // We'll only decode the middle rows, so skip the other ones
     uint32_t skipStart = (customSample - 2) / 2;
     uint32_t skipEnd = customSample - 2 - skipStart;
 
-    auto rowFn = &RGBA8888_to_RGBA8888_row;
+    auto rowFn = jinfo->out_color_space == JCS_GRAYSCALE
+                     ? &GRAY8_to_GRAY8_row
+                     : &RGBA8888_to_RGBA8888_row;
 
     for (uint32_t i = 0; i < outRect.height; i++) {
       jpeg_skip_scanlines(jinfo, skipStart);
@@ -206,17 +207,7 @@ void JpegDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
       jpeg_read_scanlines(jinfo, &inRowPtr, 1);
       jpeg_read_scanlines(jinfo, &inRow2Ptr, 1);
 
-      auto row1ToWrite = inRowPtrAligned;
-      auto row2ToWrite = inRow2PtrAligned;
-
-      if (!useTransform && transform) {
-        cmsDoTransform(transform, row1ToWrite, CMSLine1.data(), outRect.width);
-        cmsDoTransform(transform, row2ToWrite, CMSLine2.data(), outRect.width);
-        row1ToWrite = CMSLine1.data();
-        row2ToWrite = CMSLine2.data();
-      }
-
-      rowFn(outPixelsPos, row1ToWrite, row2ToWrite, outRect.width,
+      rowFn(outPixelsPos, inRowPtrAligned, inRow2PtrAligned, outRect.width,
             customSample);
       outPixelsPos += outStride;
 

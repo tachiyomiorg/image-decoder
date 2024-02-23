@@ -27,10 +27,27 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
 extern "C" JNIEXPORT jobject JNICALL
 Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(JNIEnv* env, jclass,
                                                       jobject jstream,
-                                                      jboolean cropBorders) {
+                                                      jboolean cropBorders,
+                                                      jbyteArray icm_stream) {
   auto stream = read_all_java_stream(env, jstream);
   if (!stream) {
     return nullptr;
+  }
+
+  cmsHPROFILE targetProfile = nullptr;
+  if (icm_stream) {
+    int icm_stream_len = env->GetArrayLength(icm_stream);
+    if (icm_stream_len > 0) {
+      std::vector<uint8_t> icm_buf(icm_stream_len);
+      env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
+                              reinterpret_cast<jbyte*>(icm_buf.data()));
+
+      targetProfile = cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
+    }
+  }
+
+  if (!targetProfile) {
+    targetProfile = cmsCreate_sRGBProfile();
   }
 
   BaseDecoder* decoder;
@@ -39,27 +56,28 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(JNIEnv* env, jclass,
     } // This should be optimized out by the compiler.
 #ifdef HAVE_LIBJPEG
     else if (is_jpeg(stream->bytes)) {
-      decoder = new JpegDecoder(std::move(stream), cropBorders);
+      decoder = new JpegDecoder(std::move(stream), cropBorders, targetProfile);
     }
 #endif
 #ifdef HAVE_LIBPNG
     else if (is_png(stream->bytes)) {
-      decoder = new PngDecoder(std::move(stream), cropBorders);
+      decoder = new PngDecoder(std::move(stream), cropBorders, targetProfile);
     }
 #endif
 #ifdef HAVE_LIBWEBP
     else if (is_webp(stream->bytes)) {
-      decoder = new WebpDecoder(std::move(stream), cropBorders);
+      decoder = new WebpDecoder(std::move(stream), cropBorders, targetProfile);
     }
 #endif
 #ifdef HAVE_LIBHEIF
     else if (is_libheif_compatible(stream->bytes, stream->size)) {
-      decoder = new HeifDecoder(std::move(stream), cropBorders);
+      decoder = new HeifDecoder(std::move(stream), cropBorders, targetProfile);
     }
 #endif
 #ifdef HAVE_LIBJXL
     else if (is_jxl(stream->bytes)) {
-      decoder = new JpegxlDecoder(std::move(stream), cropBorders);
+      decoder =
+          new JpegxlDecoder(std::move(stream), cropBorders, targetProfile);
     }
 #endif
     else {
@@ -76,9 +94,11 @@ Java_tachiyomi_decoder_ImageDecoder_nativeNewInstance(JNIEnv* env, jclass,
 }
 
 extern "C" JNIEXPORT jobject JNICALL
-Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
-    JNIEnv* env, jobject, jlong decoderPtr, jint sampleSize, jint x, jint y,
-    jint width, jint height, jbyteArray icm_stream) {
+Java_tachiyomi_decoder_ImageDecoder_nativeDecode(JNIEnv* env, jobject,
+                                                 jlong decoderPtr,
+                                                 jint sampleSize, jint x,
+                                                 jint y, jint width,
+                                                 jint height) {
   auto* decoder = (BaseDecoder*)decoderPtr;
 
   // Bounds of the image when crop borders is enabled, otherwise it matches the
@@ -110,39 +130,27 @@ Java_tachiyomi_decoder_ImageDecoder_nativeDecode(
     return nullptr;
   }
 
-  cmsHPROFILE targetProfile = nullptr;
-  if (icm_stream) {
-    int icm_stream_len = env->GetArrayLength(icm_stream);
-    if (icm_stream_len > 0) {
-      std::vector<uint8_t> icm_buf(icm_stream_len);
-      env->GetByteArrayRegion(icm_stream, 0, icm_stream_len,
-                              reinterpret_cast<jbyte*>(icm_buf.data()));
-
-      targetProfile = cmsOpenProfileFromMem(icm_buf.data(), icm_buf.size());
-    }
-  }
-
-  if (!targetProfile) {
-    targetProfile = cmsCreate_sRGBProfile();
-  }
-
   try {
     std::vector<uint8_t> out_buffer(outRect.width * outRect.height * 4);
-    decoder->decode(out_buffer.data(), outRect, inRect, sampleSize,
-                    targetProfile);
+    uint8_t* pout_buffer = out_buffer.data();
 
-    if (targetProfile) {
-      cmsCloseProfile(targetProfile);
-    }
+    decoder->decode(pout_buffer, outRect, inRect, sampleSize);
 
-    if (decoder->useTransform && decoder->transform) {
-      cmsDoTransform(decoder->transform, out_buffer.data(), out_buffer.data(),
+    if (decoder->useTransform) {
+      cmsDoTransform(decoder->transform, pout_buffer, pixels,
                      outRect.width * outRect.height);
-    }
 
-    // out_buffer must be rgba.
-    RGBA8888_to_RGBA8888_row(pixels, out_buffer.data(), nullptr,
-                             outRect.width * outRect.height, 1);
+      if (decoder->inType == TYPE_CMYK_8 ||
+          decoder->inType == TYPE_CMYK_8_REV ||
+          decoder->inType == TYPE_GRAY_8) {
+        for (int i = 0; i < outRect.width * outRect.height; i++) {
+          pixels[i * 4 + 3] = 255;
+        }
+      }
+    } else {
+      // out_buffer must be rgba.
+      memcpy(pixels, out_buffer.data(), outRect.width * outRect.height * 4);
+    }
   } catch (std::exception& ex) {
     LOGE("%s", ex.what());
     AndroidBitmap_unlockPixels(env, bitmap);
@@ -183,7 +191,7 @@ Java_tachiyomi_decoder_ImageDecoder_nativeFindType(JNIEnv* env, jclass,
     try {
 #ifdef HAVE_LIBWEBP
       auto decoder = std::make_unique<WebpDecoder>(
-          std::make_shared<Stream>(bytes, size), false);
+          std::make_shared<Stream>(bytes, size), false, nullptr);
       return create_image_type(env, 2, decoder->info.isAnimated);
 #else
       throw std::runtime_error("WebP decoder not available");

@@ -24,7 +24,6 @@ class ImageDecoder private constructor(
   fun decode(
     region: Rect = Rect(0, 0, width, height),
     sampleSize: Int = 1,
-    displayProfile: ByteArray? = null,
   ): Bitmap? {
     checkValidInput(region, sampleSize)
     return try {
@@ -34,7 +33,7 @@ class ImageDecoder private constructor(
       }
       nativeDecode(
         nativePtr, sampleSize, region.left, region.top, region.width(),
-        region.height(), displayProfile
+        region.height()
       )
     } finally {
       val currentDecoding = decoding.decrementAndGet()
@@ -89,7 +88,6 @@ class ImageDecoder private constructor(
     y: Int,
     width: Int,
     height: Int,
-    displayProfile: ByteArray?,
   ): Bitmap?
 
   private external fun nativeRecycle(nativePtr: Long)
@@ -102,8 +100,9 @@ class ImageDecoder private constructor(
     fun newInstance(
       stream: InputStream,
       cropBorders: Boolean = false,
+      displayProfile: ByteArray? = null,
     ) : ImageDecoder? {
-      return stream.use { nativeNewInstance(it, cropBorders) }
+      return stream.use { nativeNewInstance(it, cropBorders, displayProfile) }
     }
 
     fun findType(bytes: ByteArray): ImageType? {
@@ -114,6 +113,7 @@ class ImageDecoder private constructor(
     private external fun nativeNewInstance(
       stream: InputStream,
       cropBorders: Boolean = false,
+      displayProfile: ByteArray?,
     ) : ImageDecoder?
 
     @JvmStatic

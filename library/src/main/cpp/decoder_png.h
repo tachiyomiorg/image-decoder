@@ -29,10 +29,11 @@ public:
 
 class PngDecoder : public BaseDecoder {
 public:
-  PngDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
+  PngDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+             cmsHPROFILE targetProfile);
 
   void decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-              uint32_t sampleSize, cmsHPROFILE targetProfile);
+              uint32_t sampleSize);
 
 private:
   ImageInfo parseInfo();

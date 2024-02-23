@@ -19,6 +19,52 @@
 
 #include "row_convert.h"
 
+void GRAY8_to_GRAY8_row(uint8_t* dst, const uint8_t* src1, const uint8_t* src2,
+                        uint32_t d_width, uint32_t ratio) {
+  uint32_t i;
+  uint32_t start = (ratio - 2) / 2;
+  uint32_t interval = ratio;
+
+  src1 += start;
+  src2 += start;
+  for (i = 0; i < d_width; i++) {
+    uint16_t k;
+    k = src1[0] + src2[0];
+    k += src1[1] + src2[1];
+
+    dst[0] = (uint8_t)(k / 4);
+
+    src1 += interval;
+    src2 += interval;
+    dst += 1;
+  }
+}
+
+void GRAYA88_to_GRAYA88_row(uint8_t* dst, const uint8_t* src1,
+                            const uint8_t* src2, uint32_t d_width,
+                            uint32_t ratio) {
+  uint32_t i;
+  uint32_t start = (ratio - 2) / 2 * 2;
+  uint32_t interval = ratio * 2;
+
+  src1 += start;
+  src2 += start;
+  for (i = 0; i < d_width; i++) {
+    uint16_t k, a;
+    k = src1[0] + src2[0];
+    a = src1[1] + src2[1];
+    k += src1[2] + src2[2];
+    a += src1[3] + src2[3];
+
+    dst[0] = (uint8_t)(k / 4);
+    dst[1] = (uint8_t)(a / 4);
+
+    src1 += interval;
+    src2 += interval;
+    dst += 2;
+  }
+}
+
 void RGBA8888_to_RGBA8888_row_internal_2(uint8_t* dst, const uint8_t* src1,
                                          const uint8_t* src2, uint32_t d_width,
                                          uint32_t ratio) {
