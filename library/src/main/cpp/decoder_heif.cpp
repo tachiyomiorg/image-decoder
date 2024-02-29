@@ -6,7 +6,13 @@
 #include "row_convert.h"
 
 bool is_libheif_compatible(const uint8_t* bytes, uint32_t size) {
-  return heif_check_filetype(bytes, size) != heif_filetype_no;
+  //reject small invalid files that cause heif_check_filetype to return heif_filetype_maybe
+  if (size < 12) {
+    return false;
+  }
+
+  auto result = heif_check_filetype(bytes, size);
+  return (result != heif_filetype_no) && (result != heif_filetype_yes_unsupported);
 }
 
 auto init_heif_context(Stream* stream) {
