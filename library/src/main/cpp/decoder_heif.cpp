@@ -6,6 +6,7 @@
 #include "row_convert.h"
 
 bool is_libheif_compatible(const uint8_t* bytes, uint32_t size) {
+  //reject small invalid files that cause heif_check_filetype to return heif_filetype_maybe
   if (size < 12) {
     return false;
   }
