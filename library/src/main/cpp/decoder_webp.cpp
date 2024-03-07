@@ -55,7 +55,7 @@ cmsHPROFILE WebpDecoder::getColorProfile() {
 
   uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
   WebPChunkIterator chunk_iter;
-  cmsHPROFILE src_profile;
+  cmsHPROFILE src_profile = nullptr;
 
   if ((flags & ICCP_FLAG) && WebPDemuxGetChunk(demux, "ICCP", 1, &chunk_iter)) {
     src_profile =
@@ -67,7 +67,7 @@ cmsHPROFILE WebpDecoder::getColorProfile() {
   WebPDemuxDelete(demux);
 
   if (!src_profile) {
-    return cmsCreate_sRGBProfile();
+    return nullptr;
   }
 
   cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
@@ -75,10 +75,10 @@ cmsHPROFILE WebpDecoder::getColorProfile() {
   // WebP doesn't support gray-scale.
   if (profileSpace != cmsSigRgbData) {
     cmsCloseProfile(src_profile);
-    return cmsCreate_sRGBProfile();
+    return nullptr;
   }
 
-  return cmsCreate_sRGBProfile();
+  return src_profile;
 }
 
 void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
@@ -87,6 +87,9 @@ void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   WebPInitDecoderConfig(&config);
 
   cmsHPROFILE src_profile = getColorProfile();
+  if (!src_profile) {
+    src_profile = cmsCreate_sRGBProfile();
+  }
 
   cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
   useTransform = true;

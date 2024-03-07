@@ -42,7 +42,7 @@ protected:
 
 public:
   bool cropBorders;
-  cmsHPROFILE targetProfile;
+  cmsHPROFILE targetProfile = nullptr;
   ImageInfo info;
   cmsHTRANSFORM transform = nullptr;
   bool useTransform = false;

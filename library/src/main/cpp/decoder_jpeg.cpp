@@ -7,7 +7,6 @@
 #include "log.h"
 #include "row_convert.h"
 #include <algorithm>
-#include <iostream>
 
 JpegDecoder::JpegDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
                          cmsHPROFILE targetProfile)

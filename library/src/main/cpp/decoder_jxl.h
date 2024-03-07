@@ -25,7 +25,7 @@ private:
   ImageInfo parseInfo();
   std::vector<uint8_t> pixels;
   JxlBasicInfo jxl_info;
-  cmsHPROFILE mSrcProfile;
+  cmsHPROFILE mSrcProfile = nullptr;
   bool transformed = false;
 };
 
