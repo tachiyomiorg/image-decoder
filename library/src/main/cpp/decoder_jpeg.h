@@ -25,10 +25,11 @@ public:
 
 class JpegDecoder : public BaseDecoder {
 public:
-  JpegDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
+  JpegDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+              cmsHPROFILE targetProfile);
 
-  void decode(uint8_t* outPixels, Rect outRect, Rect srcRegion, bool rgb565,
-              uint32_t sampleSize, cmsHPROFILE targetProfile);
+  void decode(uint8_t* outPixels, Rect outRect, Rect srcRegion,
+              uint32_t sampleSize);
 
 private:
   ImageInfo parseInfo();

@@ -21,8 +21,9 @@ auto init_heif_context(Stream* stream) {
   return ctx;
 }
 
-HeifDecoder::HeifDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
-    : BaseDecoder(std::move(stream), cropBorders) {
+HeifDecoder::HeifDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+                         cmsHPROFILE targetProfile)
+    : BaseDecoder(std::move(stream), cropBorders, targetProfile) {
   this->info = parseInfo();
 }
 
@@ -59,61 +60,61 @@ ImageInfo HeifDecoder::parseInfo() {
 cmsHPROFILE HeifDecoder::getColorProfile(heif::ImageHandle handle) {
   auto im_handle = handle.get_raw_image_handle();
   size_t icc_size = heif_image_handle_get_raw_color_profile_size(im_handle);
-  if (icc_size > 0) {
-    std::vector<uint8_t> icc_profile(icc_size);
-    heif_image_handle_get_raw_color_profile(im_handle, icc_profile.data());
-
-    cmsHPROFILE src_profile =
-        cmsOpenProfileFromMem(icc_profile.data(), icc_size);
-    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-    int chromabits = handle.get_chroma_bits_per_pixel();
-
-    if (profileSpace != cmsSigRgbData &&
-        (chromabits > 0 || profileSpace != cmsSigGrayData)) {
-      cmsCloseProfile(src_profile);
-      return nullptr;
-    }
-
-    return src_profile;
-  } else {
-    return cmsCreate_sRGBProfile();
+  if (icc_size == 0) {
+    return nullptr;
   }
+  std::vector<uint8_t> icc_profile(icc_size);
+  heif_image_handle_get_raw_color_profile(im_handle, icc_profile.data());
+
+  cmsHPROFILE src_profile = cmsOpenProfileFromMem(icc_profile.data(), icc_size);
+  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+  int chromabits = handle.get_chroma_bits_per_pixel();
+
+  if (profileSpace != cmsSigRgbData && profileSpace != cmsSigGrayData) {
+    cmsCloseProfile(src_profile);
+    return nullptr;
+  }
+
+  return src_profile;
 }
 
 void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE targetProfile) {
+                         uint32_t sampleSize) {
   // Decode full image (regions, subsamples or row by row are not supported
   // sadly)
   heif::Image img;
-  cmsUInt32Number inType;
   try {
     auto ctx = init_heif_context(stream.get());
     auto handle = ctx.get_primary_image_handle();
 
-    if (targetProfile) {
-      cmsHPROFILE src_profile = getColorProfile(handle);
-      cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-      useTransform = profileSpace == cmsSigRgbData;
+    cmsHPROFILE src_profile = getColorProfile(handle);
+    if (!src_profile) {
+      src_profile = cmsCreate_sRGBProfile(); // assume sRGB
+    }
 
-      if (useTransform) {
-        inType = TYPE_RGBA_8;
-      } else if (handle.has_alpha_channel()) {
+    useTransform = true;
+
+    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+
+    if (profileSpace == cmsSigRgbData) {
+      inType = TYPE_RGBA_8;
+    } else {
+      if (handle.has_alpha_channel()) {
         inType = TYPE_GRAYA_8;
       } else {
         inType = TYPE_GRAY_8;
       }
-
-      transform =
-          cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
-                             cmsGetHeaderRenderingIntent(src_profile), 0);
-
-      cmsCloseProfile(src_profile);
     }
 
-    auto chroma = (!transform && rgb565) ? heif_chroma_interleaved_RGB
-                                         : heif_chroma_interleaved_RGBA;
-    img = handle.decode_image(heif_colorspace_RGB, chroma);
+    img =
+        handle.decode_image(heif_colorspace_RGB, heif_chroma_interleaved_RGBA);
+
+    transform =
+        cmsCreateTransform(src_profile, inType, targetProfile, TYPE_RGBA_8,
+                           cmsGetHeaderRenderingIntent(src_profile),
+                           inType != TYPE_GRAY_8 ? cmsFLAGS_COPY_ALPHA : 0);
+
+    cmsCloseProfile(src_profile);
   } catch (heif::Error& error) {
     throw std::runtime_error(error.get_message());
   }
@@ -121,49 +122,19 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   int stride;
   uint8_t* inPixels = img.get_plane(heif_channel_interleaved, &stride);
 
-  std::vector<uint8_t> pixels;
-
-  if (transform && !useTransform) {
-    uint32_t numPixels = info.imageWidth * info.imageHeight;
-    pixels.resize(numPixels * 4);
-
-    std::vector<uint8_t> gray;
-    if (inType == TYPE_GRAYA_8) {
-      gray.resize(numPixels * 2);
-      for (int i = 0; i < numPixels; i++) {
-        gray[i * 2] = inPixels[i * 4];
-        gray[i * 2 + 1] = inPixels[i * 4 + 3];
-      }
-    } else {
-      gray.resize(numPixels);
-      for (int i = 0; i < numPixels; i++) {
-        gray[i] = inPixels[i * 4];
-      }
-    }
-
-    cmsDoTransform(transform, gray.data(), pixels.data(),
-                   info.imageWidth * info.imageHeight);
-    inPixels = pixels.data();
-  }
-
   // Calculate stride of the decoded image with the requested region
   uint32_t inStride = stride;
   uint32_t inStrideOffset = inRect.x * (inStride / info.imageWidth);
   auto inPixelsPos = inPixels + inStride * inRect.y;
 
   // Calculate output stride
-  uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
+  uint32_t outStride = outRect.width * 4;
   uint8_t* outPixelsPos = outPixels;
-
-  // Set row conversion function
-  auto rowFn = (!transform && rgb565) ? &RGB888_to_RGB565_row
-                                      : &RGBA8888_to_RGBA8888_row;
 
   if (sampleSize == 1) {
     for (uint32_t i = 0; i < outRect.height; i++) {
       // Apply row conversion function to the following row
-      rowFn(outPixelsPos, inPixelsPos + inStrideOffset, nullptr, outRect.width,
-            1);
+      memcpy(outPixelsPos, inPixelsPos + inStrideOffset, outStride);
 
       // Shift row to read and write
       inPixelsPos += inStride;
@@ -179,8 +150,9 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
       inPixelsPos += inStride * skipStart;
 
       // Apply row conversion function to the following two rows
-      rowFn(outPixelsPos, inPixelsPos + inStrideOffset,
-            inPixelsPos + inStrideOffset + inStride, outRect.width, sampleSize);
+      RGBA8888_to_RGBA8888_row(outPixelsPos, inPixelsPos + inStrideOffset,
+                               inPixelsPos + inStrideOffset + inStride,
+                               outRect.width, sampleSize);
 
       // Shift row to read to the next 2 rows (the ones we've just read) + the
       // skipped end rows
@@ -188,6 +160,19 @@ void HeifDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
 
       // Shift row to write
       outPixelsPos += outStride;
+    }
+  }
+
+  if (inType == TYPE_GRAY_8) {
+    for (uint32_t i = 0; i < outRect.width * outRect.height; i++) {
+      outPixels[i] = outPixels[i * 4];
+    }
+  }
+
+  if (inType == TYPE_GRAYA_8) {
+    for (uint32_t i = 0; i < outRect.width * outRect.height; i++) {
+      outPixels[i * 2 + 0] = outPixels[i * 4 + 0];
+      outPixels[i * 2 + 1] = outPixels[i * 4 + 3];
     }
   }
 }

@@ -4,8 +4,9 @@
 
 #include "decoder_webp.h"
 
-WebpDecoder::WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
-    : BaseDecoder(std::move(stream), cropBorders) {
+WebpDecoder::WebpDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+                         cmsHPROFILE targetProfile)
+    : BaseDecoder(std::move(stream), cropBorders, targetProfile) {
   this->info = parseInfo();
 }
 
@@ -48,58 +49,58 @@ cmsHPROFILE WebpDecoder::getColorProfile() {
   WebPData data = {.bytes = stream->bytes, .size = stream->size};
   WebPDemuxer* const demux = WebPDemux(&data);
 
-  if (demux != NULL) {
-    uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
-    WebPChunkIterator chunk_iter;
-    cmsHPROFILE src_profile;
-    if ((flags & ICCP_FLAG) &&
-        WebPDemuxGetChunk(demux, "ICCP", 1, &chunk_iter)) {
-
-      src_profile =
-          cmsOpenProfileFromMem(chunk_iter.chunk.bytes, chunk_iter.chunk.size);
-
-      WebPDemuxReleaseChunkIterator(&chunk_iter);
-    }
-
-    WebPDemuxDelete(demux);
-
-    if (!src_profile) {
-      return cmsCreate_sRGBProfile();
-    }
-
-    cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-
-    // WebP doesn't support gray-scale.
-    if (profileSpace != cmsSigRgbData) {
-      cmsCloseProfile(src_profile);
-      return nullptr;
-    }
-
-    return src_profile;
-  } else {
-    return cmsCreate_sRGBProfile();
+  if (!demux) {
+    return nullptr;
   }
+
+  uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
+  WebPChunkIterator chunk_iter;
+  cmsHPROFILE src_profile = nullptr;
+
+  if ((flags & ICCP_FLAG) && WebPDemuxGetChunk(demux, "ICCP", 1, &chunk_iter)) {
+    src_profile =
+        cmsOpenProfileFromMem(chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+
+    WebPDemuxReleaseChunkIterator(&chunk_iter);
+  }
+
+  WebPDemuxDelete(demux);
+
+  if (!src_profile) {
+    return nullptr;
+  }
+
+  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+
+  // WebP doesn't support gray-scale.
+  if (profileSpace != cmsSigRgbData) {
+    cmsCloseProfile(src_profile);
+    return nullptr;
+  }
+
+  return src_profile;
 }
 
 void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                         bool rgb565, uint32_t sampleSize,
-                         cmsHPROFILE targetProfile) {
+                         uint32_t sampleSize) {
   WebPDecoderConfig config;
   WebPInitDecoderConfig(&config);
 
-  if (targetProfile) {
-    cmsHPROFILE src_profile = getColorProfile();
-    if (src_profile) {
-      cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
-      useTransform = true;
-
-      transform = cmsCreateTransform(
-          src_profile, TYPE_RGBA_8, targetProfile, TYPE_RGBA_8,
-          cmsGetHeaderRenderingIntent(src_profile), 0);
-
-      cmsCloseProfile(src_profile);
-    }
+  cmsHPROFILE src_profile = getColorProfile();
+  if (!src_profile) {
+    src_profile = cmsCreate_sRGBProfile();
   }
+
+  cmsColorSpaceSignature profileSpace = cmsGetColorSpace(src_profile);
+  useTransform = true;
+
+  inType = TYPE_RGBA_8;
+
+  transform = cmsCreateTransform(
+      src_profile, inType, targetProfile, TYPE_RGBA_8,
+      cmsGetHeaderRenderingIntent(src_profile), cmsFLAGS_COPY_ALPHA);
+
+  cmsCloseProfile(src_profile);
 
   // Set decode region
   config.options.use_cropping =
@@ -115,8 +116,8 @@ void WebpDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   config.options.scaled_height = outRect.height;
 
   // Set colorspace and stride params
-  uint32_t outStride = outRect.width * ((!transform && rgb565) ? 2 : 4);
-  config.output.colorspace = (!transform && rgb565) ? MODE_RGB_565 : MODE_RGBA;
+  uint32_t outStride = outRect.width * 4;
+  config.output.colorspace = MODE_RGBA;
   config.output.u.RGBA.rgba = outPixels;
   config.output.u.RGBA.size = outStride * outRect.height;
   config.output.u.RGBA.stride = outStride;

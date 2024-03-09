@@ -13,10 +13,11 @@
 
 class JpegxlDecoder : public BaseDecoder {
 public:
-  JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders);
+  JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+                cmsHPROFILE targetProfile);
 
-  void decode(uint8_t* outPixels, Rect outRect, Rect inRect, bool rgb565,
-              uint32_t sampleSize, cmsHPROFILE targetProfile);
+  void decode(uint8_t* outPixels, Rect outRect, Rect inRect,
+              uint32_t sampleSize);
 
 private:
   void decode();
@@ -24,7 +25,7 @@ private:
   ImageInfo parseInfo();
   std::vector<uint8_t> pixels;
   JxlBasicInfo jxl_info;
-  cmsHPROFILE mSrcProfile;
+  cmsHPROFILE mSrcProfile = nullptr;
   bool transformed = false;
 };
 

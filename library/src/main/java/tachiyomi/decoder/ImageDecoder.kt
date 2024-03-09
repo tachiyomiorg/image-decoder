@@ -23,10 +23,7 @@ class ImageDecoder private constructor(
 
   fun decode(
     region: Rect = Rect(0, 0, width, height),
-    rgb565: Boolean = true,
     sampleSize: Int = 1,
-    applyColorManagement: Boolean = false,
-    displayProfile: ByteArray? = null,
   ): Bitmap? {
     checkValidInput(region, sampleSize)
     return try {
@@ -35,8 +32,8 @@ class ImageDecoder private constructor(
         require(!isRecycled) { "The decoder has been recycled" }
       }
       nativeDecode(
-        nativePtr, rgb565, sampleSize, region.left, region.top,
-        region.width(), region.height(), applyColorManagement, displayProfile
+        nativePtr, sampleSize, region.left, region.top, region.width(),
+        region.height()
       )
     } finally {
       val currentDecoding = decoding.decrementAndGet()
@@ -86,14 +83,11 @@ class ImageDecoder private constructor(
 
   private external fun nativeDecode(
     nativePtr: Long,
-    rgb565: Boolean,
     sampleSize: Int,
     x: Int,
     y: Int,
     width: Int,
     height: Int,
-    applyColorManagement: Boolean,
-    displayProfile: ByteArray?,
   ): Bitmap?
 
   private external fun nativeRecycle(nativePtr: Long)
@@ -106,8 +100,9 @@ class ImageDecoder private constructor(
     fun newInstance(
       stream: InputStream,
       cropBorders: Boolean = false,
+      displayProfile: ByteArray? = null,
     ) : ImageDecoder? {
-      return stream.use { nativeNewInstance(it, cropBorders) }
+      return stream.use { nativeNewInstance(it, cropBorders, displayProfile) }
     }
 
     fun findType(bytes: ByteArray): ImageType? {
@@ -118,16 +113,16 @@ class ImageDecoder private constructor(
     private external fun nativeNewInstance(
       stream: InputStream,
       cropBorders: Boolean = false,
+      displayProfile: ByteArray?,
     ) : ImageDecoder?
 
     @JvmStatic
     private external fun nativeFindType(bytes: ByteArray): ImageType?
 
     @JvmStatic
-    private fun createBitmap(width: Int, height: Int, rgb565: Boolean): Bitmap? {
+    private fun createBitmap(width: Int, height: Int): Bitmap? {
       return try {
-        val config = if (rgb565) Bitmap.Config.RGB_565 else Bitmap.Config.ARGB_8888
-        Bitmap.createBitmap(width, height, config)
+        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
       } catch (e: OutOfMemoryError) {
         null
       }

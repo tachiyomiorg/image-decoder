@@ -5,8 +5,10 @@
 #include "decoder_jxl.h"
 #include "row_convert.h"
 
-JpegxlDecoder::JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders)
-    : BaseDecoder(std::move(stream), cropBorders), mSrcProfile(nullptr) {
+JpegxlDecoder::JpegxlDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+                             cmsHPROFILE targetProfile)
+    : BaseDecoder(std::move(stream), cropBorders, targetProfile),
+      mSrcProfile(nullptr) {
   this->info = parseInfo();
 }
 
@@ -63,29 +65,41 @@ void JpegxlDecoder::decode() {
         throw std::runtime_error("JxlDecoderSetImageOutBuffer failed");
       }
     } else if (status == JXL_DEC_COLOR_ENCODING) {
+      // libjxl built-in color management, not fully available
+      /*
+      JxlDecoderSetCms(dec.get(), *JxlGetDefaultCms());
+      cmsUInt32Number profileSize;
+      cmsSaveProfileToMem(targetProfile, NULL, &profileSize);
+      std::vector<uint8_t> profile(profileSize);
+      cmsSaveProfileToMem(targetProfile, profile.data(), &profileSize);
+
+      if (JXL_DEC_SUCCESS != JxlDecoderSetOutputColorProfile(dec.get(), NULL,
+                                                             profile.data(),
+                                                             profileSize)) {
+        throw std::runtime_error("JxlDecoderSetOutputColorProfile failed");
+      }*/
+
       size_t size = 0;
       if (JXL_DEC_SUCCESS !=
-          JxlDecoderGetICCProfileSize(dec.get(), &format,
-                                      JXL_COLOR_PROFILE_TARGET_DATA, &size)) {
+          JxlDecoderGetICCProfileSize(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
+                                      &size)) {
         throw std::runtime_error("JxlDecoderGetICCProfileSize failed");
       }
 
       std::vector<uint8_t> icc_profile(size);
-      if (JXL_DEC_SUCCESS !=
-          JxlDecoderGetColorAsICCProfile(dec.get(), &format,
-                                         JXL_COLOR_PROFILE_TARGET_DATA,
-                                         icc_profile.data(), size)) {
+      if (JXL_DEC_SUCCESS != JxlDecoderGetColorAsICCProfile(
+                                 dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
+                                 icc_profile.data(), size)) {
         throw std::runtime_error("JxlDecoderGetColorAsICCProfile failed");
       }
 
       mSrcProfile = cmsOpenProfileFromMem(icc_profile.data(), size);
       cmsColorSpaceSignature profileSpace = cmsGetColorSpace(mSrcProfile);
 
-      if (profileSpace != cmsSigRgbData && (jxl_info.num_color_channels == 3 ||
-                                            profileSpace != cmsSigGrayData)) {
+      if (jxl_info.num_color_channels == 3 && profileSpace != cmsSigRgbData ||
+          jxl_info.num_color_channels == 1 && profileSpace != cmsSigGrayData) {
         cmsCloseProfile(mSrcProfile);
         mSrcProfile = nullptr;
-        break;
       }
     } else if (status == JXL_DEC_FULL_IMAGE) {
       break;
@@ -137,19 +151,17 @@ ImageInfo JpegxlDecoder::parseInfo() {
 }
 
 void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                           bool rgb565, uint32_t sampleSize,
-                           cmsHPROFILE targetProfile) {
+                           uint32_t sampleSize) {
   decode();
 
   // Save transformed pixel data.
-  if (targetProfile && mSrcProfile && !transformed) {
+  if (!transformed) {
     uint8_t* buf = pixels.data();
 
-    cmsUInt32Number inType;
     std::vector<uint8_t> gray;
     if (jxl_info.num_color_channels == 3) {
       inType = TYPE_RGBA_8;
-    } else {
+    } else if (mSrcProfile) {
       uint32_t num_pixels = jxl_info.xsize * jxl_info.ysize;
       if (jxl_info.alpha_bits > 0) {
         gray.resize(num_pixels * 2);
@@ -168,14 +180,20 @@ void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
       buf = gray.data();
     }
 
+    if (!mSrcProfile) {
+      inType = TYPE_RGBA_8;
+      mSrcProfile = cmsCreate_sRGBProfile(); // assume sRGB, should never happen
+    }
+
     transform =
         cmsCreateTransform(mSrcProfile, inType, targetProfile, TYPE_RGBA_8,
-                           cmsGetHeaderRenderingIntent(mSrcProfile), 0);
+                           cmsGetHeaderRenderingIntent(mSrcProfile),
+                           inType != TYPE_GRAY_8 ? cmsFLAGS_COPY_ALPHA : 0);
 
     cmsCloseProfile(mSrcProfile);
 
     cmsDoTransform(transform, buf, pixels.data(),
-                   info.imageWidth * info.imageHeight);
+                   jxl_info.xsize * jxl_info.ysize);
 
     cmsDeleteTransform(transform);
     transform = nullptr;
@@ -188,17 +206,16 @@ void JpegxlDecoder::decode(uint8_t* outPixels, Rect outRect, Rect inRect,
   auto inPixelsPos = (uint8_t*)pixels.data() + inStride * inRect.y;
 
   // Calculate output stride
-  uint32_t outStride = outRect.width * (rgb565 ? 2 : 4);
+  uint32_t outStride = outRect.width * 4;
   uint8_t* outPixelsPos = outPixels;
 
   // Set row conversion function
-  auto rowFn = rgb565 ? &RGBA8888_to_RGB565_row : &RGBA8888_to_RGBA8888_row;
+  auto rowFn = &RGBA8888_to_RGBA8888_row;
 
   if (sampleSize == 1) {
     for (uint32_t i = 0; i < outRect.height; i++) {
       // Apply row conversion function to the following row
-      rowFn(outPixelsPos, inPixelsPos + inStrideOffset, nullptr, outRect.width,
-            1);
+      memcpy(outPixelsPos, inPixelsPos + inStrideOffset, outStride);
 
       // Shift row to read and write
       inPixelsPos += inStride;

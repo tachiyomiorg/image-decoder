@@ -19,28 +19,34 @@ struct ImageInfo {
 
 class BaseDecoder {
 public:
-  BaseDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders) {
+  BaseDecoder(std::shared_ptr<Stream>&& stream, bool cropBorders,
+              cmsHPROFILE targetProfile) {
     this->stream = std::move(stream);
     this->cropBorders = cropBorders;
+    this->targetProfile = targetProfile;
   }
   virtual ~BaseDecoder() {
     if (transform) {
       cmsDeleteTransform(transform);
     }
+    if (targetProfile) {
+      cmsCloseProfile(targetProfile);
+    }
   };
 
   virtual void decode(uint8_t* outPixels, Rect outRect, Rect inRect,
-                      bool rgb565, uint32_t sampleSize,
-                      cmsHPROFILE targetProfile) = 0;
+                      uint32_t sampleSize) = 0;
 
 protected:
   std::shared_ptr<Stream> stream;
 
 public:
   bool cropBorders;
+  cmsHPROFILE targetProfile = nullptr;
   ImageInfo info;
   cmsHTRANSFORM transform = nullptr;
   bool useTransform = false;
+  cmsUInt32Number inType;
 };
 
 #endif // IMAGEDECODER_DECODER_BASE_H
