@@ -13,7 +13,7 @@ set(DAV1D_FILENAME "${dav1d_BINARY_DIR}/src/libdav1d.a")
 if(NOT EXISTS "${DAV1D_FILENAME}")
   set(ENV{ANDROID_NDK} ${CMAKE_ANDROID_NDK})
   set(PREPARE_DAV1D "${CMAKE_CURRENT_LIST_DIR}/generate_dav1d_android_cross_compile.sh -a ${CMAKE_ANDROID_ARCH}")
-  set(CONFIG_DAV1D "meson --buildtype release --default-library static --cross-file android_cross.txt -Denable_tools=false -Denable_tests=false -Dbitdepths=8 ${dav1d_SOURCE_DIR}")
+  set(CONFIG_DAV1D "meson --buildtype release --default-library static --cross-file android_cross.txt -Denable_tools=false -Denable_tests=false ${dav1d_SOURCE_DIR}")
   set(BUILD_DAV1D "ninja")
 
   if(DEFINED ENV{JITPACK})
