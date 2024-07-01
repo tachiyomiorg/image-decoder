@@ -1,2 +1,6 @@
+jdk:
+  - openjdk8
 before_install:
   - yes | $ANDROID_HOME/tools/bin/sdkmanager "cmake;3.22.1" "ndk;26.2.11394342"
+  - sdk install java 17.0.11-oracle
+  - sdk use java 17.0.11-oracle
