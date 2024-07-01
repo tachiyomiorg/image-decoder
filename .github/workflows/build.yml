@@ -28,6 +28,15 @@ jobs:
           java-version: 17
           distribution: adopt
 
+      - name: Install native build dependencies
+        run: |
+          sudo apt update
+          sudo apt install \
+            build-essential \
+            meson \
+            ninja-build \
+            nasm
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
